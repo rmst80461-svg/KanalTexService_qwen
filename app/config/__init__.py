@@ -4,18 +4,16 @@ Configuration module for the application
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
+# Загружаем переменные из .env файла
 load_dotenv()
 
 # Flask configuration
-FLASK_SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key-change-in-production')
+# Вторым аргументом идет значение по умолчанию, если переменная не найдена
+FLASK_SECRET_KEY = os.getenv('SECRET_KEY', 'default-dev-key-12345')
 ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
-
-# Устанавливаем значение по умолчанию 'default_hash', чтобы не вылетала ошибка
-ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH', 'default_hash')
+ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH', 'default_hash_value')
 
 # Bot configuration
-# Устанавливаем значение по умолчанию 'your_bot_token', чтобы приложение запускалось
-BOT_TOKEN = os.getenv("BOT_TOKEN", "your_bot_token_here")
-
-# Мы убрали блоки 'if not ... raise ValueError', чтобы приложение не падало при отсутствии .env
+BOT_TOKEN = os.getenv("BOT_TOKEN", "") 
+# Мы не кидаем ошибку здесь, чтобы приложение не падало. 
+# Бот сам сообщит о проблеме при запуске, если токена не будет.
