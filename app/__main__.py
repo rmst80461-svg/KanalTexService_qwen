@@ -1,5 +1,5 @@
 """
-Main entry point for the refactored application
+Main entry point for the application
 """
 import asyncio
 import logging
