@@ -2,7 +2,7 @@
 Web routes for the admin panel
 """
 import io
-import pandas as pd
+import csv
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file, g
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
@@ -115,20 +115,30 @@ def setup_routes(app: Flask, db: 'Database', telegram_bot: 'TelegramBot' = None)
         # Get all requests
         all_requests = db.get_all_requests()
         
-        # Convert to DataFrame
-        df = pd.DataFrame(all_requests, columns=[
+        # Define column headers
+        headers = [
             'ID', 'User ID', 'Full Name', 'Address', 'Service Type', 
             'Phone', 'Status', 'Comment', 'Created At'
-        ])
+        ]
         
-        # Save to buffer
-        buffer = io.StringIO()
-        df.to_csv(buffer, index=False)
-        buffer.seek(0)
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow(headers)
+        
+        # Write data rows
+        for row in all_requests:
+            writer.writerow(row)
+        
+        # Get the CSV content
+        csv_content = output.getvalue()
+        output.close()
         
         # Create BytesIO object for sending
         mem = io.BytesIO()
-        mem.write(buffer.getvalue().encode('utf-8'))
+        mem.write(csv_content.encode('utf-8'))
         mem.seek(0)
         
         return send_file(
