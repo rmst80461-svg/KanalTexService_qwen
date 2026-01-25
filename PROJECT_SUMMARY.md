@@ -53,7 +53,6 @@
 - **Flask-Login** - для аутентификации
 - **SQLite** - для хранения данных
 - **Bootstrap 5** - для оформления веб-интерфейса
-- **pandas** - для экспорта в CSV
 - **python-dotenv** - для работы с переменными окружения
 
 ## Зависимости (requirements.txt)
@@ -64,9 +63,8 @@ Flask==2.3.3
 Flask-Login==0.6.3
 Werkzeug==2.3.7
 python-dotenv==1.0.0
-pandas==2.0.3
 openpyxl==3.1.2
-aiohttp==3.8.5
+aiohttp>=3.9.0
 ```
 
 ## Переменные окружения (.env)
