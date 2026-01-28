@@ -14,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import configuration
-frnfig import FLASK_SECRET_KEY, BOT_TOKEN
+from app.config import FLASK_SECRET_KEY, BOT_TOKEN
 from app.models.database import Database
 from app.bot.bot_handler import TelegramBot
 from app.web.routes import setup_routes
@@ -22,7 +22,8 @@ from app.web.routes import setup_routes
 
 def create_app(db: Database, telegram_bot: TelegramBot):
     """Create and configure the Flask application"""
-       app = Flask(__name__)
+    try:
+        app = Flask(__name__)
         app.config['SECRET_KEY'] = FLASK_SECRET_KEY
         
         # Setup routes with database and bot instances
