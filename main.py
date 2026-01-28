@@ -3,67 +3,79 @@ Main entry point for the refactored application
 """
 import asyncio
 import logging
-import threading
 import os
 from flask import Flask
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
+# Import configuration
+frnfig import FLASK_SECRET_KEY, BOT_TOKEN
 from app.models.database import Database
 from app.bot.bot_handler import TelegramBot
 from app.web.routes import setup_routes
-from app.config import FLASK_SECRET_KEY
 
 
-def create_app():
+def create_app(db: Database, telegram_bot: TelegramBot):
     """Create and configure the Flask application"""
-    app = Flask(__name__)
-    app.config['SECRET_KEY'] = FLASK_SECRET_KEY
-    
-    # Initialize database
-    db = Database()
-    
-    # Initialize bot (will be passed to routes later)
-    telegram_bot = TelegramBot(db)
-    
-    # Setup routes with database and bot instances
-    setup_routes(app, db, telegram_bot)
-    
-    return app, telegram_bot
+       app = Flask(__name__)
+        app.config['SECRET_KEY'] = FLASK_SECRET_KEY
+        
+        # Setup routes with database and bot instances
+        setup_routes(app, db, telegram_bot)
+        
+        logger.info("Flask app created successfully")
+        return app
+    except Exception as e:
+        logger.error(f"Error creating Flask app: {e}")
+        raise
 
 
-def run_flask():
-    """Function to run Flask application"""
-    app, _ = create_app()
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
-
-
-async def run_bot(bot_instance):
+async def run_bot(bot_instance: TelegramBot):
     """Function to run Telegram bot"""
-    await bot_instance.run()
+    try:
+        logger.info("Starting Telegram bot...")
+        await bot_instance.run()
+    except Exception as e:
+        logger.error(f"Error running bot: {e}")
+        raise
+
+
+def main():
+    """Main function"""
+    try:
+        # Initialize database
+        logger.info("Initializing database...")
+        db = Database()
+        
+        # Initialize bot
+        logger.info("Initializing Telegram bot...")
+        telegram_bot = TelegramBot(db)
+        
+        # Create Flask app with the shared instances
+        logger.info("Creating Flask application...")
+        app = create_app(db, telegram_bot)
+        
+        # Get port from environment or use default
+        port = int(os.environ.get('PORT', 5000))
+        
+        # Log startup info
+        logger.info(f"Application configured to run on port {port}")
+        logger.info("Starting application with Telegram bot polling...")
+        
+        # Run the bot
+        asyncio.run(run_bot(telegram_bot))
+        
+    except KeyboardInterrupt:
+        logger.info("Application stopped by user")
+    except Exception as e:
+        logger.error(f"Fatal error: {e}", exc_info=True)
+        raise
 
 
 if __name__ == '__main__':
-    # Initialize database and bot
-    db = Database()
-    telegram_bot = TelegramBot(db)
-    
-    # Create Flask app with the shared instances
-    app = Flask(__name__)
-    app.config['SECRET_KEY'] = FLASK_SECRET_KEY
-    setup_routes(app, db, telegram_bot)
-    
-    # Run Flask in a separate thread
-    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False))
-    flask_thread.daemon = True
-    flask_thread.start()
-    
-    # Run the bot
-    try:
-        asyncio.run(run_bot(telegram_bot))
-    except KeyboardInterrupt:
-        logging.info("Application stopped by user")
-    except Exception as e:
-        logging.error(f"Error running application: {e}")
+    main()
