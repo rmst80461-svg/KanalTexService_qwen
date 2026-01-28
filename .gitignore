@@ -1,4 +1,3 @@
-```
 # Directories
 KanalTexService_qwen/
 
@@ -10,6 +9,10 @@ KanalTexService_qwen/
 .env
 .env.local
 *.env.*
+
+# Bot Token - SECURITY CRITICAL
+# Never commit this file to version control!
+bot_token.txt
 
 # Editors
 .vscode/
@@ -29,7 +32,7 @@ target/
 
 # OS generated files
 .DS_Store
-Thumbs.db
+Thumbz.db
 
 # Compiled files
 *.pyc
@@ -46,6 +49,10 @@ Thumbs.db
 coverage/
 htmlcov/
 .coverage
+
+# Database
+*.db
+requests.db
 
 # Compressed files
 *.zip
@@ -70,4 +77,3 @@ htmlcov/
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-```
