@@ -8,6 +8,7 @@ import sys
 import re
 from pathlib import Path
 from flask import Flask
+from dotenv import load_dotenv
 
 # Setup logging
 logging.basicConfig(
@@ -15,6 +16,25 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def load_env_from_root():
+    """
+    Load .env file from project root (where main.py is located)
+    This ensures all settings (BOT_TOKEN, ADMIN_IDS, etc.) are loaded correctly
+    """
+    # Path to project root (where main.py is)
+    base_dir = Path(__file__).resolve().parent
+    env_path = base_dir / ".env"
+    
+    if env_path.exists():
+        print(f"📄 Loading .env from project root: {env_path}")
+        load_dotenv(env_path)
+        return True
+    else:
+        print(f"⚠️  .env not found in project root ({env_path})")
+        print("   Using system environment variables only")
+        return False
 
 
 def load_bot_token() -> str:
@@ -117,6 +137,10 @@ def main():
         logger.info("🤖 КаналТехСервис - Telegram Bot & Admin Panel")
         logger.info("="*60)
         
+        # ========== LOAD .ENV FROM PROJECT ROOT ==========
+        logger.info("\n[0/5] Loading configuration from .env...")
+        load_env_from_root()
+        
         # ========== LOAD AND VALIDATE BOT_TOKEN ==========
         logger.info("\n[1/5] Loading BOT_TOKEN...")
         bot_token = load_bot_token()
@@ -131,7 +155,12 @@ def main():
                 "  2. Environment Variables section\n"
                 "  3. Add new variable: BOT_TOKEN = your_token\n"
                 "  4. Click Save and Restart\n\n"
-                "Option 2: bot_token.txt File\n"
+                "Option 2: .env File in Project Root\n"
+                "  1. Create file '.env' in project root\n"
+                "  2. Add: BOT_TOKEN=your_token\n"
+                "  3. Push to BotHost\n"
+                "  4. Restart application\n\n"
+                "Option 3: bot_token.txt File\n"
                 "  1. Create file 'bot_token.txt' in project root\n"
                 "  2. Paste your token (just the token, no spaces)\n"
                 "  3. Push to BotHost\n"
