@@ -1,37 +1,10 @@
 """
 Configuration module for the application
+NOTE: .env loading happens in main.py before this module is imported
 """
 import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
-
-# ========== FLEXIBLE .ENV LOADING ==========
-# Try to load .env from multiple locations
-def load_env_file():
-    """
-    Load .env file from multiple possible locations:
-    1. Current working directory
-    2. Project root (where main.py is)
-    3. Parent directory
-    """
-    possible_paths = [
-        Path.cwd() / '.env',                    # Current directory
-        Path(__file__).parent.parent.parent / '.env',  # Project root
-        Path.cwd().parent / '.env',             # Parent directory
-    ]
-    
-    for env_path in possible_paths:
-        if env_path.exists():
-            print(f"📄 Loading .env from: {env_path}")
-            load_dotenv(env_path)
-            return True
-    
-    print("⚠️  No .env file found, using system environment variables only")
-    return False
-
-# Load environment variables
-load_env_file()
 
 # ========== ENVIRONMENT DETECTION ==========
 ENV_MODE = os.getenv('ENVIRONMENT', 'development').lower()
