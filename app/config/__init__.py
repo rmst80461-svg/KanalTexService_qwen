@@ -78,6 +78,28 @@ else:
     if ADMIN_PASSWORD_HASH == '$2b$12$R9h/cIPz0gi.URNNX3kh2OPST9/PgBkqquzi.Ee3XEALtW5RhHKNa':
         print("⚠️  Using default admin password: 12345")
 
+# ========== TELEGRAM ADMINS CONFIGURATION ==========
+# Parse ADMIN_IDS from comma-separated string in .env
+# Example in .env: ADMIN_IDS=12345, 67890, 112233
+raw_admin_ids = os.getenv('ADMIN_IDS', '').strip()
+
+ADMIN_IDS = []
+if raw_admin_ids:
+    for part in raw_admin_ids.split(','):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            admin_id = int(part)
+            ADMIN_IDS.append(admin_id)
+        except ValueError:
+            print(f"⚠️  ADMIN_IDS: Skipping invalid value '{part}' (must be a number)")
+else:
+    print("ℹ️  ADMIN_IDS not set - admin access available only via web interface")
+
+if ADMIN_IDS:
+    print(f"✓ Loaded {len(ADMIN_IDS)} Telegram admin(s): {ADMIN_IDS}")
+
 # ========== BOT CONFIGURATION ==========
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 
