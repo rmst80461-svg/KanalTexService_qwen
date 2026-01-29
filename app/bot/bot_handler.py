@@ -29,6 +29,7 @@ from .keyboards import (
     get_admin_orders_submenu,
     remove_keyboard
 )
+from .ai_helper import get_ai_response
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +168,14 @@ class TelegramBot:
             )
             
             await self.notify_admins_new_order(order_id, service_name, address, phone, comment)
+        
+        elif step == 'ai_chat':
+            response = get_ai_response(text)
+            await update.message.reply_text(
+                response,
+                parse_mode=ParseMode.HTML,
+                reply_markup=get_back_button()
+            )
         
         else:
             await update.message.reply_text(
