@@ -28,7 +28,10 @@ from .keyboards import (
     get_admin_main_menu,
     get_admin_order_detail_keyboard,
     get_admin_orders_submenu,
-    remove_keyboard
+    remove_keyboard,
+    get_skip_comment_keyboard,
+    get_cancel_order_keyboard,
+    get_confirm_order_keyboard
 )
 from .ai_helper import get_ai_response
 
@@ -133,48 +136,22 @@ class TelegramBot:
             context.user_data['step'] = 'enter_phone'
             await update.message.reply_text(
                 "📞 Супер! Теперь напишите номер телефона для связи:",
-                parse_mode=ParseMode.HTML
+                parse_mode=ParseMode.HTML,
+                reply_markup=get_cancel_order_keyboard()
             )
         
         elif step == 'enter_phone':
             context.user_data['phone'] = text
             context.user_data['step'] = 'enter_comment'
             await update.message.reply_text(
-                "💬 Почти готово! Хотите добавить комментарий? Если нет — напишите «нет»:",
-                parse_mode=ParseMode.HTML
+                "💬 Почти готово! Напишите комментарий или нажмите кнопку:",
+                parse_mode=ParseMode.HTML,
+                reply_markup=get_skip_comment_keyboard()
             )
         
         elif step == 'enter_comment':
-            comment = text if text.lower() != 'нет' else ''
-            
-            service_name = context.user_data.get('service_name', 'Не указана')
-            address = context.user_data.get('address', 'Не указан')
-            phone = context.user_data.get('phone', 'Не указан')
-            
-            order_id = self.db.create_order(
-                user_id=user_id,
-                service_type=context.user_data.get('service_type', 'other'),
-                address=address,
-                phone=phone,
-                comment=comment
-            )
-            
-            context.user_data.clear()
-            
-            await update.message.reply_text(
-                f"🎉 <b>Заявка #{order_id} оформлена!</b>\n\n"
-                f"📋 Услуга: {service_name}\n"
-                f"📍 Адрес: {address}\n"
-                f"📞 Телефон: {phone}\n"
-                f"💬 Комментарий: {comment if comment else '—'}\n\n"
-                f"👷 Мастер свяжется с вами в ближайшее время!\n"
-                f"📞 Горячая линия: +7 (910) 555-84-14\n\n"
-                f"Спасибо, что выбрали <b>КаналТехСервис</b>! Рада была помочь! 😊",
-                parse_mode=ParseMode.HTML,
-                reply_markup=get_main_menu()
-            )
-            
-            await self.notify_admins_new_order(order_id, service_name, address, phone, comment)
+            context.user_data['comment'] = text
+            await self.show_order_confirmation(update.message, context)
         
         elif step == 'ai_chat':
             response = get_ai_response(text)
@@ -302,9 +279,37 @@ class TelegramBot:
                     await query.message.reply_text(
                         f"👍 Отлично! Вы выбрали: <b>{service_names.get(service, service)}</b>\n\n"
                         f"📍 Напишите адрес, куда приехать мастеру:",
-                        parse_mode=ParseMode.HTML
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=get_cancel_order_keyboard()
                     )
                     context.user_data['step'] = 'enter_address'
+
+            # Пропустить комментарий
+            elif data == "skip_comment":
+                context.user_data['comment'] = ''
+                await self.show_order_confirmation(query.message, context)
+
+            # Отменить заявку
+            elif data == "cancel_order":
+                context.user_data.clear()
+                await query.message.reply_text(
+                    "❌ Заявка отменена.\n\nЕсли передумаете — я всегда на связи! 😊",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=get_main_menu()
+                )
+
+            # Подтвердить заявку
+            elif data == "confirm_order":
+                await self.finalize_order(query, context)
+
+            # Изменить данные
+            elif data == "edit_order":
+                context.user_data['step'] = 'select_service'
+                await query.message.reply_text(
+                    "✏️ Давайте начнём заново!\n\n<b>Выберите нужную услугу:</b>",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=get_services_menu()
+                )
 
             # Показ цен по категориям
             elif data.startswith("price_"):
@@ -324,6 +329,63 @@ class TelegramBot:
                 await query.answer("Произошла ошибка", show_alert=True)
             except:
                 pass
+
+    async def show_order_confirmation(self, message, context):
+        """Показать подтверждение заявки перед отправкой."""
+        service_name = context.user_data.get('service_name', 'Не указана')
+        address = context.user_data.get('address', 'Не указан')
+        phone = context.user_data.get('phone', 'Не указан')
+        comment = context.user_data.get('comment', '')
+        
+        text = (
+            f"📋 <b>Проверьте данные заявки:</b>\n\n"
+            f"🔧 Услуга: {service_name}\n"
+            f"📍 Адрес: {address}\n"
+            f"📞 Телефон: {phone}\n"
+            f"💬 Комментарий: {comment if comment else '—'}\n\n"
+            f"Всё верно? Нажмите «Подтвердить» 👇"
+        )
+        
+        context.user_data['step'] = 'confirm_order'
+        await message.reply_text(
+            text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_confirm_order_keyboard()
+        )
+
+    async def finalize_order(self, query, context):
+        """Создать заявку после подтверждения."""
+        user_id = query.from_user.id
+        
+        service_name = context.user_data.get('service_name', 'Не указана')
+        address = context.user_data.get('address', 'Не указан')
+        phone = context.user_data.get('phone', 'Не указан')
+        comment = context.user_data.get('comment', '')
+        
+        order_id = self.db.create_order(
+            user_id=user_id,
+            service_type=context.user_data.get('service_type', 'other'),
+            address=address,
+            phone=phone,
+            comment=comment
+        )
+        
+        context.user_data.clear()
+        
+        await query.message.reply_text(
+            f"🎉 <b>Заявка #{order_id} оформлена!</b>\n\n"
+            f"📋 Услуга: {service_name}\n"
+            f"📍 Адрес: {address}\n"
+            f"📞 Телефон: {phone}\n"
+            f"💬 Комментарий: {comment if comment else '—'}\n\n"
+            f"👷 Мастер свяжется с вами в ближайшее время!\n"
+            f"📞 Горячая линия: +7 (910) 555-84-14\n\n"
+            f"Спасибо, что выбрали <b>КаналТехСервис</b>! Рада была помочь! 😊",
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_main_menu()
+        )
+        
+        await self.notify_admins_new_order(order_id, service_name, address, phone, comment)
 
     async def show_prices(self, query, category_data):
         """Показать цены по категориям услуг."""

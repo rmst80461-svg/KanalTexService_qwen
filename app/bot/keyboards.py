@@ -85,6 +85,33 @@ def get_ai_chat_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(buttons)
 
 
+def get_skip_comment_keyboard() -> InlineKeyboardMarkup:
+    """Кнопка пропустить комментарий."""
+    buttons = [
+        [InlineKeyboardButton("⏭ Без комментария", callback_data="skip_comment")],
+        [InlineKeyboardButton("❌ Отменить заявку", callback_data="cancel_order")],
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+
+def get_cancel_order_keyboard() -> InlineKeyboardMarkup:
+    """Кнопка отмены заказа."""
+    buttons = [
+        [InlineKeyboardButton("❌ Отменить заявку", callback_data="cancel_order")],
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+
+def get_confirm_order_keyboard() -> InlineKeyboardMarkup:
+    """Кнопки подтверждения заказа."""
+    buttons = [
+        [InlineKeyboardButton("✅ Подтвердить заявку", callback_data="confirm_order")],
+        [InlineKeyboardButton("✏️ Изменить данные", callback_data="edit_order")],
+        [InlineKeyboardButton("❌ Отменить", callback_data="cancel_order")],
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+
 def get_admin_main_menu() -> ReplyKeyboardMarkup:
     """Главное меню админа."""
     keyboard = [
