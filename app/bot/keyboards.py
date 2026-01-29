@@ -43,6 +43,8 @@ def get_services_menu() -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton("🚚  Откачка септика          ", callback_data="service_septic")],
         [InlineKeyboardButton("🚽  Прочистка канализации", callback_data="service_cleaning")],
+        [InlineKeyboardButton("💧  Каналопромывка          ", callback_data="service_canal_wash")],
+        [InlineKeyboardButton("🔧  Илосос                          ", callback_data="service_sludge")],
         [InlineKeyboardButton("🔍  Видеодиагностика        ", callback_data="service_video")],
         [InlineKeyboardButton("🧹  Промывка канализации ", callback_data="service_flushing")],
         [InlineKeyboardButton("❓  Другое                           ", callback_data="service_other")],
