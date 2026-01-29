@@ -106,11 +106,73 @@ class TelegramBot:
 
     async def handle_menu_button(self, update: Update, context):
         """Обработка кнопки ☰ Меню."""
+        context.user_data.clear()
         await update.message.reply_text(
             "<b>🔽 Главное меню КаналТехСервис:</b>",
             parse_mode=ParseMode.HTML,
             reply_markup=get_main_menu()
         )
+
+    async def handle_text_input(self, update: Update, context):
+        """Обработка текстового ввода для заказа."""
+        text = update.message.text
+        user_id = update.effective_user.id
+        step = context.user_data.get('step')
+        
+        logger.info(f"Text input from {user_id}: '{text}', step: {step}")
+        
+        if step == 'enter_address':
+            context.user_data['address'] = text
+            context.user_data['step'] = 'enter_phone'
+            await update.message.reply_text(
+                "📞 Введите номер телефона для связи:",
+                parse_mode=ParseMode.HTML
+            )
+        
+        elif step == 'enter_phone':
+            context.user_data['phone'] = text
+            context.user_data['step'] = 'enter_comment'
+            await update.message.reply_text(
+                "💬 Добавьте комментарий к заявке (или напишите 'нет'):",
+                parse_mode=ParseMode.HTML
+            )
+        
+        elif step == 'enter_comment':
+            comment = text if text.lower() != 'нет' else ''
+            
+            service_name = context.user_data.get('service_name', 'Не указана')
+            address = context.user_data.get('address', 'Не указан')
+            phone = context.user_data.get('phone', 'Не указан')
+            
+            order_id = self.db.create_order(
+                user_id=user_id,
+                service_type=context.user_data.get('service_type', 'other'),
+                address=address,
+                phone=phone,
+                comment=comment
+            )
+            
+            context.user_data.clear()
+            
+            await update.message.reply_text(
+                f"✅ <b>Заявка #{order_id} создана!</b>\n\n"
+                f"📋 Услуга: {service_name}\n"
+                f"📍 Адрес: {address}\n"
+                f"📞 Телефон: {phone}\n"
+                f"💬 Комментарий: {comment if comment else 'нет'}\n\n"
+                f"⏳ Мы свяжемся с вами в ближайшее время!\n"
+                f"📞 Горячая линия: +7 (910) 555-84-14",
+                parse_mode=ParseMode.HTML,
+                reply_markup=get_main_menu()
+            )
+            
+            await self.notify_admins_new_order(order_id, service_name, address, phone, comment)
+        
+        else:
+            await update.message.reply_text(
+                "Используйте меню для навигации:",
+                reply_markup=get_main_menu()
+            )
 
     async def handle_callback_query(self, update: Update, context):
         """Обработка всех callback запросов."""
@@ -445,6 +507,30 @@ class TelegramBot:
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления: {e}")
 
+    async def notify_admins_new_order(self, order_id, service_name, address, phone, comment):
+        """Уведомление админов о новой заявке."""
+        try:
+            text = (
+                f"🆕 <b>Новая заявка #{order_id}</b>\n\n"
+                f"📋 Услуга: {service_name}\n"
+                f"📍 Адрес: {address}\n"
+                f"📞 Телефон: {phone}\n"
+                f"💬 Комментарий: {comment if comment else 'нет'}"
+            )
+            
+            if self.application:
+                for admin_id in self.admin_ids:
+                    try:
+                        await self.application.bot.send_message(
+                            chat_id=admin_id,
+                            text=text,
+                            parse_mode=ParseMode.HTML
+                        )
+                    except Exception as e:
+                        logger.error(f"Ошибка уведомления админа {admin_id}: {e}")
+        except Exception as e:
+            logger.error(f"Ошибка уведомления админов: {e}")
+
     def setup_handlers(self):
         """Регистрация всех обработчиков."""
         # /start
@@ -458,6 +544,11 @@ class TelegramBot:
         # Callbacks
         self.application.add_handler(
             CallbackQueryHandler(self.handle_callback_query)
+        )
+        
+        # Текстовый ввод (адрес, телефон, комментарий)
+        self.application.add_handler(
+            MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex("^☰ Меню$"), self.handle_text_input)
         )
         
         logger.info("✅ Обработчики зарегистрированы")
