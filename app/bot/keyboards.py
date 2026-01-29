@@ -75,6 +75,16 @@ def get_back_button() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(buttons)
 
 
+def get_ai_chat_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура для AI-чата с кнопкой заказа."""
+    buttons = [
+        [InlineKeyboardButton("📝 Оформить заявку", callback_data="new_order")],
+        [InlineKeyboardButton("📞 Позвонить: +7(910)555-84-14", callback_data="show_phone")],
+        [InlineKeyboardButton("◀️  Главное меню", callback_data="back_menu")],
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+
 def get_admin_main_menu() -> ReplyKeyboardMarkup:
     """Главное меню админа."""
     keyboard = [

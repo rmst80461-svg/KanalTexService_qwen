@@ -24,6 +24,7 @@ from .keyboards import (
     get_prices_menu,
     get_faq_menu,
     get_back_button,
+    get_ai_chat_keyboard,
     get_admin_main_menu,
     get_admin_order_detail_keyboard,
     get_admin_orders_submenu,
@@ -174,7 +175,7 @@ class TelegramBot:
             await update.message.reply_text(
                 response,
                 parse_mode=ParseMode.HTML,
-                reply_markup=get_back_button()
+                reply_markup=get_ai_chat_keyboard()
             )
         
         else:
@@ -251,24 +252,19 @@ class TelegramBot:
                 )
 
             # Контакты
-            elif data == "contacts":
+            elif data == "contacts" or data == "show_phone":
                 contacts_text = (
                     "📍 <b>КаналТехСервис</b>\n\n"
-                    "📞 Телефон: +7 (910) 555-84-14\n"
-                    "📧 Email: info@kanalteh.ru\n"
-                    "🌐 Сайт: kanalteh.ru\n\n"
-                    "⏰ Режим работы: 24/7\n"
-                    "🏠 Адрес: г. Ярцево, Смоленская область\n\n"
-                    "🚗 Зоны обслуживания:\n"
-                    "• г. Ярцево\n"
-                    "• Ярцевский район\n"
-                    "• Дачные поселки\n"
-                    "• п. Солнечный"
+                    "📞 Телефон: <b>+7 (910) 555-84-14</b>\n"
+                    "📧 Email: info@kanalteh.ru\n\n"
+                    "⏰ Режим работы: <b>24/7</b>\n"
+                    "🏠 г. Ярцево, Смоленская область\n\n"
+                    "☎️ Звоните прямо сейчас — мы на связи!"
                 )
-                await query.edit_message_text(
+                await query.message.reply_text(
                     contacts_text,
                     parse_mode=ParseMode.HTML,
-                    reply_markup=get_back_button()
+                    reply_markup=get_ai_chat_keyboard()
                 )
 
             # Обработка услуг для заказа
