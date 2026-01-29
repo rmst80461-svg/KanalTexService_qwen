@@ -1,262 +1,320 @@
 """
-Telegram bot handler module
+Telegram bot handler - полная интеграция всех модулей (образец: ShveinyiHUB)
+Адаптировано для КаналТехСервис, г. Ярцево
 """
-import asyncio
+import os
 import logging
-import re
-from datetime import datetime
+from pathlib import Path
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message
-from aiogram.fsm.state import State, StatesGroup
-from aiogram.fsm.context import FSMContext
+from aiogram.types import Message, CallbackQuery, BotCommand
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.filters import Command
 from aiogram.enums import ParseMode
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.database import Database
 
+logger = logging.getLogger(__name__)
 
-class RequestForm(StatesGroup):
-    waiting_for_full_name = State()
-    waiting_for_address = State()
-    waiting_for_service = State()
-    waiting_for_phone = State()
-
+# Информация о компании
+COMPANY_INFO = {
+    "name": "КаналТехСервис",
+    "city": "г. Ярцево",
+    "address": "г. Ярцево, Смоленская область",
+    "phone": "+7 (XXX) XXX-XX-XX",  # TODO: Заполнить реальный номер
+    "whatsapp": "+7 (XXX) XXX-XX-XX",
+    "hours": "Круглосуточно, 24/7"
+}
 
 class TelegramBot:
     def __init__(self, db: 'Database'):
         from app.config import BOT_TOKEN
         self.bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
-        self.dp = Dispatcher()
+        self.storage = MemoryStorage()
+        self.dp = Dispatcher(storage=self.storage)
         self.db = db
         
-        # Register handlers
+        # Путь к логотипу
+        self.logo_path = Path(__file__).parent.parent.parent / "assets" / "logo.jpg"
+        
+        # Регистрация handlers
         self.register_handlers()
     
     def register_handlers(self):
-        """Register handlers"""
-        self.dp.message(Command("start"))(self.cmd_start)
-        self.dp.message(Command("help"))(self.cmd_help)
-        self.dp.message(Command("status"))(self.cmd_status)
-        self.dp.message(F.text == "Новая заявка")(self.process_new_request_command)
+        """Регистрация всех handlers по образцу ShveinyiHUB"""
+        from app.bot.handlers.commands import CommandsHandler
+        from app.bot.handlers.order_handler import OrderHandler, SELECT_CATEGORY, ENTER_DESCRIPTION, UPLOAD_PHOTO, CONFIRM_ORDER
+        from app.bot.handlers.admin_handler import AdminHandler
+        from app.bot.handlers.review_handler import ReviewHandler
+        from app.bot.handlers.faq_handler import FAQHandler
+        from app.bot.handlers.price_handler import PriceHandler
+        from aiogram.fsm.context import FSMContext
+        from aiogram.types import Update
+        from telegram.ext import ConversationHandler
         
-        # FSM handlers
-        self.dp.message(RequestForm.waiting_for_full_name)(self.process_full_name)
-        self.dp.message(RequestForm.waiting_for_address)(self.process_address)
-        self.dp.message(RequestForm.waiting_for_service)(self.process_service)
-        self.dp.message(RequestForm.waiting_for_phone)(self.process_phone)
+        # Инициализация handlers
+        cmd_handler = CommandsHandler(self.db)
+        order_handler = OrderHandler(self.db)
+        admin_handler = AdminHandler(self.db)
+        review_handler = ReviewHandler(self.db)
+        faq_handler = FAQHandler(self.db)
+        price_handler = PriceHandler(self.db)
+        
+        # === КОМАНДЫ ===
+        self.dp.message.register(self.cmd_start, Command("start"))
+        self.dp.message.register(cmd_handler.help_command, Command("help"))
+        self.dp.message.register(order_handler.start_order, Command("order"))
+        self.dp.message.register(cmd_handler.status_command, Command("status"))
+        self.dp.message.register(price_handler.services_command, Command("services"))
+        self.dp.message.register(faq_handler.faq_command, Command("faq"))
+        self.dp.message.register(cmd_handler.contact_command, Command("contact"))
+        self.dp.message.register(cmd_handler.menu_command, Command("menu"))
+        
+        # Админ команды
+        self.dp.message.register(admin_handler.admin_panel, Command("admin"))
+        self.dp.message.register(admin_handler.show_stats, Command("stats"))
+        self.dp.message.register(admin_handler.list_orders, Command("orders"))
+        self.dp.message.register(admin_handler.list_users, Command("users"))
+        self.dp.message.register(admin_handler.broadcast_start, Command("broadcast"))
+        
+        # === CALLBACK HANDLERS ===
+        # Главное меню
+        self.dp.callback_query.register(order_handler.start_order, F.data == "new_order")
+        self.dp.callback_query.register(price_handler.show_services, F.data == "services")
+        self.dp.callback_query.register(self.callback_check_status, F.data == "check_status")
+        self.dp.callback_query.register(faq_handler.show_faq_menu, F.data == "faq")
+        self.dp.callback_query.register(self.callback_contacts, F.data == "contacts")
+        self.dp.callback_query.register(self.callback_back_menu, F.data == "back_menu")
+        self.dp.callback_query.register(self.callback_contact_master, F.data == "contact_master")
+        
+        # Цены по категориям
+        self.dp.callback_query.register(price_handler.show_category, F.data.startswith("price_"))
+        
+        # FAQ категории
+        self.dp.callback_query.register(faq_handler.show_faq_item, F.data.startswith("faq_"))
+        
+        # Заказы - callback
+        self.dp.callback_query.register(order_handler.select_category, F.data.startswith("cat_"))
+        self.dp.callback_query.register(order_handler.finalize_order, F.data.in_(["confirm_yes", "confirm_no"]))
+        self.dp.callback_query.register(order_handler.view_order_details, F.data.startswith("view_order_"))
+        
+        # Отзывы
+        self.dp.callback_query.register(review_handler.start_review, F.data == "leave_review")
+        self.dp.callback_query.register(review_handler.select_rating, F.data.startswith("rating_"))
+        
+        # Админ callbacks
+        self.dp.callback_query.register(admin_handler.handle_admin_callback, F.data.startswith("admin_"))
+        self.dp.callback_query.register(admin_handler.handle_order_status, F.data.startswith("order_"))
+        self.dp.callback_query.register(admin_handler.handle_pagination, F.data.startswith("page_"))
+        
+        logger.info("✅ Все handlers зарегистрированы")
     
-    async def cmd_start(self, message: Message, state: FSMContext):
-        """Handle /start command"""
-        await state.clear()
-        welcome_text = (
-            f"Добро пожаловать в систему подачи заявок <b>КаналТехСервис</b>, г. Ярцево!\n\n"
-            f"С помощью этого бота вы можете подать заявку на ассенизаторские услуги.\n\n"
-            f"Для начала работы нажмите кнопку <b>Новая заявка</b> или введите /help для справки."
+    async def cmd_start(self, message: Message):
+        """Команда /start с логотипом (по образцу ShveinyiHUB)"""
+        from app.bot.keyboards import Keyboards
+        kb = Keyboards()
+        
+        user = message.from_user
+        name = user.first_name or "друг"
+        
+        # Приветственный текст
+        caption = (
+            f"🚰 <b>{COMPANY_INFO['name']}</b>\n\n"
+            f"Здравствуйте, {name}! 👋\n\n"
+            f"Мы предоставляем профессиональные ассенизаторские услуги в {COMPANY_INFO['city']}.\n\n"
+            f"Чем можем помочь?"
         )
         
-        # Keyboard with "New Request" button
-        keyboard = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="Новая заявка")]
-            ],
-            resize_keyboard=True
-        )
-        
-        await message.answer(welcome_text, reply_markup=keyboard)
-    
-    async def cmd_help(self, message: Message, state: FSMContext):
-        """Handle /help command"""
-        await state.clear()
-        help_text = (
-            "<b>КаналТехСервис, г. Ярцево</b>\n\n"
-            "Доступные команды:\n"
-            "/start - Начать работу с ботом\n"
-            "/help - Показать это сообщение\n"
-            "/status - Проверить статус вашей последней заявки\n\n"
-            "Чтобы подать новую заявку, нажмите кнопку <b>Новая заявка</b>"
-        )
-        await message.answer(help_text)
-    
-    async def cmd_status(self, message: Message):
-        """Handle /status command"""
-        user_id = message.from_user.id
-        
-        # Get user's latest request using the database class
-        # We'll fetch all requests and filter by user_id to use our existing methods
-        all_requests = self.db.get_all_requests()
-        user_requests = [req for req in all_requests if req[1] == user_id]  # Filter by user_id (index 1)
-        
-        if user_requests:
-            # Get the most recent request
-            latest_request = user_requests[0]  # Since they're ordered by date DESC
-            request_id, _, _, _, _, _, status, comment, created_at = latest_request
-            
-            status_text = f"Ваша последняя заявка №{request_id}:\n"
-            status_text += f"<b>Статус:</b> {status}\n"
-            status_text += f"<b>Дата создания:</b> {created_at}\n"
-            
-            if comment:
-                status_text += f"<b>Комментарий:</b> {comment}"
-            
-            await message.answer(status_text)
+        # Отправляем логотип если есть
+        if self.logo_path.exists():
+            try:
+                with open(self.logo_path, "rb") as photo:
+                    await message.answer_photo(
+                        photo=photo,
+                        caption=caption,
+                        parse_mode=ParseMode.HTML
+                    )
+            except Exception as e:
+                logger.warning(f"Не удалось отправить логотип: {e}")
+                await message.answer(caption, parse_mode=ParseMode.HTML)
         else:
-            await message.answer("У вас пока нет заявок в системе.")
-    
-    async def process_new_request_command(self, message: Message, state: FSMContext):
-        """Start new request process"""
-        user_id = message.from_user.id
+            await message.answer(caption, parse_mode=ParseMode.HTML)
         
-        # Check if user has submitted a request within the last 24 hours
-        if self.db.get_user_last_request_within_24h(user_id):
-            await message.answer(
-                "Вы уже подавали заявку за последние 24 часа. "
-                "Подождите до истечения этого периода перед подачей новой заявки."
-            )
-            return
-        
-        await state.set_state(RequestForm.waiting_for_full_name)
+        # Главное меню
+        menu_text = f"🚰 <b>{COMPANY_INFO['name']} — Главное меню</b>"
         await message.answer(
-            "Введите ваше полное имя (ФИО):"
+            menu_text,
+            reply_markup=kb.main_menu_inline(),
+            parse_mode=ParseMode.HTML
         )
+        
+        # Сохраняем пользователя в БД
+        self.db.add_user(
+            user_id=user.id,
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name
+        )
+        self.db.update_user_activity(user.id)
     
-    async def process_full_name(self, message: Message, state: FSMContext):
-        """Process entered full name"""
-        full_name = message.text.strip()
+    async def callback_check_status(self, callback: CallbackQuery):
+        """Проверка статуса заказов пользователя"""
+        from app.bot.keyboards import Keyboards
+        from app.utils.formatters import format_order_id
         
-        if len(full_name.split()) < 2:
-            await message.answer("Пожалуйста, введите полное имя (ФИО):")
-            return
+        kb = Keyboards()
+        await callback.answer()
         
-        await state.update_data(full_name=full_name)
-        await state.set_state(RequestForm.waiting_for_address)
+        user_id = callback.from_user.id
+        orders = self.db.get_user_orders(user_id)
         
-        # Keyboard with address options
-        keyboard = ReplyKeyboardMarkup(
-            keyboard=[
-                [
-                    KeyboardButton(text="Ярцево"),
-                    KeyboardButton(text="Дачный посёлок")
-                ],
-                [
-                    KeyboardButton(text="п. Солнечный"),
-                    KeyboardButton(text="Другое")
-                ]
-            ],
-            resize_keyboard=True
-        )
-        
-        await message.answer(
-            "Выберите адрес выполнения работ:",
-            reply_markup=keyboard
-        )
-    
-    async def process_address(self, message: Message, state: FSMContext):
-        """Process selected address"""
-        address = message.text.strip()
-        
-        # Validate address
-        valid_addresses = ["Ярцево", "Дачный посёлок", "п. Солнечный", "Другое"]
-        if address not in valid_addresses:
-            await message.answer(
-                "Пожалуйста, выберите адрес из предложенных вариантов:"
+        if not orders:
+            text = (
+                "🔍 У вас нет активных заказов.\n\n"
+                f"Позвоните нам: {COMPANY_INFO['phone']}"
             )
-            return
-        
-        await state.update_data(address=address)
-        await state.set_state(RequestForm.waiting_for_service)
-        
-        # Keyboard with service options
-        keyboard = ReplyKeyboardMarkup(
-            keyboard=[
-                [
-                    KeyboardButton(text="Ассенизаторские услуги"),
-                    KeyboardButton(text="Вызов сантехника")
-                ],
-                [
-                    KeyboardButton(text="Прочистка труб"),
-                    KeyboardButton(text="Установка сантехники")
-                ]
-            ],
-            resize_keyboard=True
-        )
-        
-        await message.answer(
-            "Выберите тип услуги:",
-            reply_markup=keyboard
-        )
-    
-    async def process_service(self, message: Message, state: FSMContext):
-        """Process selected service type"""
-        service_type = message.text.strip()
-        
-        # Validate service type
-        valid_services = ["Ассенизаторские услуги", "Вызов сантехника", "Прочистка труб", "Установка сантехники"]
-        if service_type not in valid_services:
-            await message.answer(
-                "Пожалуйста, выберите тип услуги из предложенных вариантов:"
-            )
-            return
-        
-        await state.update_data(service_type=service_type)
-        await state.set_state(RequestForm.waiting_for_phone)
-        
-        # Remove keyboard after service selection
-        await message.answer(
-            "Введите ваш номер телефона в формате +7XXXXXXXXXX:",
-            reply_markup=ReplyKeyboardRemove()
-        )
-    
-    async def process_phone(self, message: Message, state: FSMContext):
-        """Process entered phone number"""
-        phone = message.text.strip()
-        
-        # Check phone number format
-        phone_pattern = r'^\+7\d{10}$'
-        if not re.match(phone_pattern, phone):
-            await message.answer(
-                "Неверный формат номера телефона. Введите номер в формате +7XXXXXXXXXX:"
-            )
-            return
-        
-        # Get data from state
-        data = await state.get_data()
-        user_id = message.from_user.id
-        full_name = data['full_name']
-        address = data['address']
-        service_type = data['service_type']
-        
-        # Create request in database
-        request_id = self.db.create_request(user_id, full_name, address, service_type, phone)
-        
-        # Clear state
-        await state.clear()
-        
-        # Send confirmation
-        success_message = (
-            f"Спасибо, <b>{full_name}</b>! Ваша заявка №{request_id} принята.\n\n"
-            f"Адрес: {address}\n"
-            f"Услуга: {service_type}\n"
-            f"Телефон: {phone}\n\n"
-            f"С вами свяжется наш специалист для уточнения деталей.\n\n"
-            f"Компания <b>КаналТехСервис</b>, г. Ярцево"
-        )
-        
-        await message.answer(success_message)
-    
-    async def send_status_update(self, user_id: int, request_id: int, new_status: str, comment: str = None):
-        """Send status update to user"""
-        try:
-            status_message = f"Статус вашей заявки №{request_id} обновлен: <b>{new_status}</b>"
-            if comment:
-                status_message += f"\nКомментарий: {comment}"
+        else:
+            text = "🔍 <b>Ваши заказы:</b>\n\n"
+            status_map = {
+                "new": "🆕 Новый",
+                "accepted": "✅ Принят",
+                "in_progress": "🔄 В работе",
+                "completed": "✅ Выполнен",
+                "cancelled": "❌ Отменён"
+            }
             
-            await self.bot.send_message(user_id, status_message)
+            for order in orders[:5]:  # Показываем последние 5
+                status = status_map.get(order['status'], order['status'])
+                desc = order['description'] or order['service_type']
+                formatted_id = format_order_id(order['order_id'], order['created_at'])
+                text += f"<b>{formatted_id}</b> - {status}\n{desc}\n\n"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=kb.back_button(),
+            parse_mode=ParseMode.HTML
+        )
+    
+    async def callback_contacts(self, callback: CallbackQuery):
+        """Показать контакты"""
+        from app.bot.keyboards import Keyboards
+        kb = Keyboards()
+        await callback.answer()
+        
+        text = (
+            f"📍 <b>Наши контакты:</b>\n\n"
+            f"🏠 <b>Адрес:</b>\n{COMPANY_INFO['address']}\n\n"
+            f"📞 <b>Телефон:</b>\n{COMPANY_INFO['phone']}\n\n"
+            f"💬 <b>WhatsApp:</b>\n{COMPANY_INFO['whatsapp']}\n\n"
+            f"⏰ <b>Режим работы:</b>\n{COMPANY_INFO['hours']}"
+        )
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=kb.back_button(),
+            parse_mode=ParseMode.HTML
+        )
+    
+    async def callback_back_menu(self, callback: CallbackQuery):
+        """Вернуться в главное меню"""
+        from app.bot.keyboards import Keyboards
+        kb = Keyboards()
+        await callback.answer()
+        
+        text = f"🚰 <b>{COMPANY_INFO['name']} — Главное меню</b>"
+        await callback.message.edit_text(
+            text,
+            reply_markup=kb.main_menu_inline(),
+            parse_mode=ParseMode.HTML
+        )
+    
+    async def callback_contact_master(self, callback: CallbackQuery):
+        """Связаться с мастером"""
+        from app.bot.keyboards import Keyboards
+        kb = Keyboards()
+        await callback.answer()
+        
+        text = (
+            f"👨‍🔧 <b>Связаться с нами</b>\n\n"
+            f"📞 <b>Позвоните:</b> {COMPANY_INFO['phone']}\n"
+            f"💬 <b>WhatsApp:</b> {COMPANY_INFO['whatsapp']}\n\n"
+            f"📍 <b>Адрес:</b>\n{COMPANY_INFO['address']}\n\n"
+            f"⏰ {COMPANY_INFO['hours']}"
+        )
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=kb.back_button(),
+            parse_mode=ParseMode.HTML
+        )
+    
+    async def send_status_notification(self, user_id: int, order_id: int, new_status: str, comment: str = None):
+        """Отправка уведомления об изменении статуса заказа"""
+        from app.utils.formatters import format_order_id
+        from app.models.database import Database
+        
+        order = self.db.get_order(order_id)
+        if not order:
+            return
+        
+        status_text = {
+            'new': '🆕 Новый',
+            'accepted': '✅ Принят в работу',
+            'in_progress': '🔄 Выполняется',
+            'completed': '✅ Выполнен',
+            'cancelled': '❌ Отменён'
+        }.get(new_status, new_status)
+        
+        formatted_id = format_order_id(order_id, order['created_at'])
+        
+        message = (
+            f"📢 <b>Обновление статуса заказа</b>\n\n"
+            f"Заказ: <b>{formatted_id}</b>\n"
+            f"Новый статус: {status_text}\n"
+        )
+        
+        if comment:
+            message += f"\n💬 Комментарий: {comment}"
+        
+        try:
+            await self.bot.send_message(user_id, message, parse_mode=ParseMode.HTML)
+            logger.info(f"✅ Уведомление отправлено пользователю {user_id} о заказе {order_id}")
         except Exception as e:
-            logging.error(f"Error sending status update to user {user_id}: {e}")
+            logger.error(f"❌ Не удалось отправить уведомление пользователю {user_id}: {e}")
+    
+    async def setup_bot_commands(self):
+        """Установка команд бота в меню"""
+        commands = [
+            BotCommand(command="start", description="🏠 Главное меню"),
+            BotCommand(command="order", description="➕ Оформить заказ"),
+            BotCommand(command="status", description="🔍 Статус заказа"),
+            BotCommand(command="services", description="📋 Услуги и цены"),
+            BotCommand(command="faq", description="❓ Частые вопросы"),
+            BotCommand(command="contact", description="📞 Контакты"),
+            BotCommand(command="help", description="❓ Справка"),
+        ]
+        
+        await self.bot.set_my_commands(commands)
+        logger.info("✅ Команды бота установлены")
     
     async def run(self):
-        """Run the bot"""
-        await self.dp.start_polling(self.bot)
+        """Запуск бота"""
+        try:
+            # Устанавливаем команды
+            await self.setup_bot_commands()
+            
+            # Удаляем webhook если был
+            await self.bot.delete_webhook(drop_pending_updates=True)
+            
+            logger.info("🚀 Бот запущен и готов к работе!")
+            logger.info(f"📋 Компания: {COMPANY_INFO['name']}, {COMPANY_INFO['city']}")
+            
+            # Запускаем polling
+            await self.dp.start_polling(self.bot)
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка при запуске бота: {e}")
+            raise
+        finally:
+            await self.bot.session.close()
