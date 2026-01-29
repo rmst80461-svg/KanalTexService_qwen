@@ -54,6 +54,11 @@ htmlcov/
 *.db
 requests.db
 
+# Replit
+.pythonlibs/
+.upm/
+.cache/
+
 # Compressed files
 *.zip
 *.gz

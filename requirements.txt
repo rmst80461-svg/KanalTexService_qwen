@@ -8,3 +8,15 @@ aiohttp>=3.9.0
 passlib[bcrypt]==1.7.4
 gunicorn==21.2.0
 python-telegram-bot==20.8
+aiogram
+aiohttp
+bcrypt
+Flask
+Flask-Login
+gunicorn
+openpyxl
+passlib
+python-dotenv
+python-telegram-bot
+requests
+Werkzeug

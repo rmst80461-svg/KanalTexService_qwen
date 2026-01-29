@@ -49,15 +49,17 @@ logger = logging.getLogger(__name__)
 
 # Проверка токена
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_ENABLED = bool(BOT_TOKEN)
 
 if not BOT_TOKEN:
-    logger.error(
+    logger.warning(
         "\n" + "="*60 + "\n"
-        "🔴 CRITICAL ERROR: BOT_TOKEN not found!\n\n"
-        "Please set BOT_TOKEN in .env file or environment variables.\n"
+        "⚠️ WARNING: BOT_TOKEN not found!\n\n"
+        "The Telegram bot will be disabled.\n"
+        "Only the web admin panel will be available.\n"
+        "Set BOT_TOKEN in Secrets to enable the bot.\n"
         "="*60
     )
-    sys.exit(1)
 
 # --- ИМПОРТ ВЕБ-АДМИНКИ (Flask) ---
 try:
@@ -83,7 +85,7 @@ def run_flask_app():
         from app.web.routes import create_app
         flask_app = create_app(db, None)
         
-        port = int(os.getenv("FLASK_PORT", "8080"))
+        port = int(os.getenv("PORT", "5000"))
         logger.info(f"🌐 Flask starting on port {port}...")
         flask_app.run(host="0.0.0.0", port=port, use_reloader=False, threaded=True)
     except Exception as e:
@@ -93,74 +95,82 @@ def run_flask_app():
 def main():
     """Главная функция запуска бота"""
     logger.info("="*60)
-    logger.info("🚰 КаналТехСервис - Telegram Bot & Admin Panel")
-    logger.info("🏙️ г. Ярцево, Смоленская область")
-    logger.info("👨‍💻 Адаптировано из ShveinyiHUB")
+    logger.info("КаналТехСервис - Telegram Bot & Admin Panel")
+    logger.info("г. Ярцево, Смоленская область")
+    logger.info("Адаптировано из ShveinyiHUB")
     logger.info("="*60)
-    
-    # Задержка 5 секунд перед запуском
-    logger.info("⏳ Ожидание 5 секунд перед запуском...")
-    time.sleep(5)
-    
-    # Сброс webhook
-    try:
-        import requests
-        requests.get(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook?drop_pending_updates=true",
-            timeout=10
-        )
-        logger.info("✅ Webhook сброшен")
-    except Exception as e:
-        logger.warning(f"⚠️ Не удалось сбросить webhook: {e}")
-    
-    # Запуск Flask в отдельном потоке
-    if not os.getenv("SKIP_FLASK") and not os.getenv("SKIP_BOT"):
-        flask_thread = threading.Thread(target=run_flask_app, daemon=True)
-        flask_thread.start()
-        logger.info("✅ Flask запущен в фоновом режиме")
-        time.sleep(3)  # Даём Flask время запуститься
     
     # Инициализация базы данных
     logger.info("\n[1/3] Инициализация базы данных...")
     from app.models.database import Database
     db = Database()
-    db.init_db()  # Создание таблиц
-    logger.info("✅ База данных инициализирована")
+    db.init_db()
+    logger.info("База данных инициализирована")
     
     # Загрузка цен из JSON
     try:
         from app.utils.prices import load_prices_from_json
         load_prices_from_json()
-        logger.info("✅ Цены загружены")
+        logger.info("Цены загружены")
     except Exception as e:
-        logger.warning(f"⚠️ Не удалось загрузить цены: {e}")
+        logger.warning(f"Не удалось загрузить цены: {e}")
     
-    # Инициализация Telegram бота
-    logger.info("\n[2/3] Инициализация Telegram бота...")
-    from app.bot.bot_handler import TelegramBot
-    bot = TelegramBot(db)
-    logger.info("✅ Telegram бот инициализирован")
-    
-    # Запуск бота
-    logger.info("\n[3/3] Запуск бота...")
-    logger.info("\n" + "="*60)
-    logger.info("🚀 Бот запущен и готов к работе!")
-    logger.info("📞 Контакты: +7 (XXX) XXX-XX-XX")  # TODO: Заполнить
-    logger.info("(Нажмите Ctrl+C для остановки)")
-    logger.info("="*60 + "\n")
-    
-    # Асинхронный запуск
-    try:
-        asyncio.run(bot.run())
-    except KeyboardInterrupt:
+    if BOT_ENABLED:
+        # Сброс webhook для Telegram бота
+        try:
+            import requests
+            requests.get(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook?drop_pending_updates=true",
+                timeout=10
+            )
+            logger.info("Webhook сброшен")
+        except Exception as e:
+            logger.warning(f"Не удалось сбросить webhook: {e}")
+        
+        # Запуск Flask в отдельном потоке
+        if not os.getenv("SKIP_FLASK"):
+            flask_thread = threading.Thread(target=run_flask_app, daemon=True)
+            flask_thread.start()
+            logger.info("Flask запущен в фоновом режиме")
+            time.sleep(2)
+        
+        # Инициализация Telegram бота
+        logger.info("\n[2/3] Инициализация Telegram бота...")
+        from app.bot.bot_handler import TelegramBot
+        bot = TelegramBot(db)
+        logger.info("Telegram бот инициализирован")
+        
+        # Запуск бота
+        logger.info("\n[3/3] Запуск бота...")
         logger.info("\n" + "="*60)
-        logger.info("⏹️ Бот остановлен пользователем")
-        logger.info("="*60)
-    except Exception as e:
-        logger.error("\n" + "="*60)
-        logger.error(f"💥 Критическая ошибка: {type(e).__name__}: {e}", exc_info=True)
-        logger.error("="*60)
-        sys.exit(1)
+        logger.info("Бот запущен и готов к работе!")
+        logger.info("Контакты: +7 (910) 555-84-14")
+        logger.info("(Нажмите Ctrl+C для остановки)")
+        logger.info("="*60 + "\n")
+        
+        # Асинхронный запуск
+        try:
+            asyncio.run(bot.run())
+        except KeyboardInterrupt:
+            logger.info("\n" + "="*60)
+            logger.info("Бот остановлен пользователем")
+            logger.info("="*60)
+        except Exception as e:
+            logger.error("\n" + "="*60)
+            logger.error(f"Критическая ошибка: {type(e).__name__}: {e}", exc_info=True)
+            logger.error("="*60)
+            sys.exit(1)
+    else:
+        # Режим только веб-панели (без бота)
+        logger.info("\n[2/3] Telegram бот отключен (нет BOT_TOKEN)")
+        logger.info("\n[3/3] Запуск только веб-панели...")
+        logger.info("\n" + "="*60)
+        logger.info("Веб-панель запущена!")
+        logger.info("Добавьте BOT_TOKEN в Secrets для активации бота")
+        logger.info("="*60 + "\n")
+        
+        # Запуск Flask в основном потоке
+        run_flask_app()
 
 
 if __name__ == '__main__':
