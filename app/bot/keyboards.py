@@ -1,202 +1,189 @@
-"""Клавиатуры для Telegram бота."""
+"""Клавиатуры для Telegram бота швейной мастерской."""
 from telegram import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton, KeyboardButton
 from typing import List
 
 
-def get_main_menu_keyboard(is_admin: bool = False) -> ReplyKeyboardMarkup:
-    """Главное меню."""
+# === ГЛАВНОЕ МЕНЮ ===
+def get_main_menu_keyboard() -> ReplyKeyboardMarkup:
+    """Главное меню бота."""
     keyboard = [
-        ['📝 Оформить заказ', '📋 Мои заказы'],
-        ['💰 Прайс-лист', '❓ FAQ'],
-        ['⭐ Оставить отзыв', '📞 Контакты']
+        ["📋 Новый заказ", "📦 Мои заказы"],
+        ["💰 Цены", "❓ FAQ"],
+        ["⭐ Оставить отзыв", "📞 Контакты"]
     ]
-    
-    if is_admin:
-        keyboard.append(['🔑 Админ-панель'])
-    
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
-def get_cancel_keyboard() -> ReplyKeyboardMarkup:
-    """Клавиатура с кнопкой Отмена."""
-    keyboard = [['❌ Отмена']]
+# === АДМИН МЕНЮ ===
+def get_admin_menu_keyboard() -> ReplyKeyboardMarkup:
+    """Меню администратора."""
+    keyboard = [
+        ["📊 Статистика", "📋 Заказы"],
+        ["👥 Пользователи", "📢 Рассылка"],
+        ["💰 Управление ценами", "❓ Управление FAQ"],
+        ["🔙 Выход из админ-панели"]
+    ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
-def get_services_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура выбора услуги."""
+# === КАТЕГОРИИ УСЛУГ ===
+def get_service_categories_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура выбора категории услуг."""
     keyboard = [
-        [InlineKeyboardButton("🧵 Ремонт одежды", callback_data="service:repair")],
-        [InlineKeyboardButton("✂️ Пошив на заказ", callback_data="service:custom")],
-        [InlineKeyboardButton("👗 Ушив/расшив одежды", callback_data="service:alter")],
-        [InlineKeyboardButton("🧵 Чистка и уход", callback_data="service:cleaning")],
-        [InlineKeyboardButton("🎨 Декорирование", callback_data="service:decoration")],
-        [InlineKeyboardButton("🛠 Другое", callback_data="service:other")]
+        [InlineKeyboardButton("👗 Ремонт одежды", callback_data="cat_repair")],
+        [InlineKeyboardButton("✂️ Пошив одежды", callback_data="cat_sewing")],
+        [InlineKeyboardButton("🎨 Декор и украшение", callback_data="cat_decor")],
+        [InlineKeyboardButton("🧵 Подгонка по фигуре", callback_data="cat_fitting")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="cancel")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_categories_keyboard(service_type: str) -> InlineKeyboardMarkup:
-    """Клавиатура категорий для услуги."""
-    categories_map = {
-        'repair': [
-            ('👕 Верхняя одежда', 'outerwear'),
-            ('👖 Брюки/юбки', 'bottoms'),
-            ('👗 Платья', 'dresses'),
-            ('🧥 Куртки/пальто', 'jackets'),
-        ],
-        'custom': [
-            ('👗 Платье', 'dress'),
-            ('👖 Брюки/юбка', 'pants_skirt'),
-            ('👕 Блузка/рубашка', 'shirt'),
-            ('🧥 Верхняя одежда', 'outerwear'),
-        ],
-        'alter': [
-            ('👖 Укоротить брюки', 'shorten_pants'),
-            ('👗 Ушить платье', 'take_in_dress'),
-            ('👕 Расширить одежду', 'let_out'),
-        ]
-    }
-    
-    categories = categories_map.get(service_type, [('🛠 Стандартное', 'standard')])
-    
-    keyboard = [[InlineKeyboardButton(name, callback_data=f"category:{cat_id}")] 
-                for name, cat_id in categories]
-    keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_services")])
-    
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_confirm_order_keyboard() -> InlineKeyboardMarkup:
-    """Подтверждение заказа."""
+# === СТАТУСЫ ЗАКАЗОВ ===
+def get_order_status_keyboard(order_id: int) -> InlineKeyboardMarkup:
+    """Клавиатура управления статусом заказа."""
     keyboard = [
-        [InlineKeyboardButton("✅ Подтвердить заказ", callback_data="confirm_order")],
-        [InlineKeyboardButton("❌ Отменить", callback_data="cancel_order")]
+        [InlineKeyboardButton("✅ Принят в работу", callback_data=f"status_{order_id}_in_progress")],
+        [InlineKeyboardButton("⏰ Ожидает клиента", callback_data=f"status_{order_id}_waiting_client")],
+        [InlineKeyboardButton("🎉 Завершен", callback_data=f"status_{order_id}_completed")],
+        [InlineKeyboardButton("❌ Отменен", callback_data=f"status_{order_id}_cancelled")],
+        [InlineKeyboardButton("🔙 Назад", callback_data=f"order_details_{order_id}")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_my_orders_keyboard(orders: List[dict]) -> InlineKeyboardMarkup:
-    """Клавиатура списка заказов."""
-    keyboard = []
-    
-    for order in orders:
-        order_id = order['order_id']
-        status_emoji = {
-            'new': '🆕',
-            'in_progress': '⏳',
-            'completed': '✅',
-            'cancelled': '❌'
-        }.get(order['status'], '❓')
-        
-        button_text = f"{status_emoji} Заказ #{order_id:04d} - {order['service_type']}"
-        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"order_details:{order_id}")])
-    
-    if not keyboard:
-        keyboard.append([InlineKeyboardButton("📝 Оформить первый заказ", callback_data="new_order")])
-    
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_order_details_keyboard(order_id: int, can_cancel: bool = True) -> InlineKeyboardMarkup:
-    """Клавиатура деталей заказа."""
-    keyboard = []
-    
-    if can_cancel:
-        keyboard.append([InlineKeyboardButton("❌ Отменить заказ", callback_data=f"cancel_order:{order_id}")])
-    
-    keyboard.append([InlineKeyboardButton("⬅️ К моим заказам", callback_data="my_orders")])
-    
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_rating_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура для оценки."""
+# === ПРОСМОТР ЗАКАЗОВ ===
+def get_orders_filter_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура фильтрации заказов."""
     keyboard = [
-        [
-            InlineKeyboardButton("⭐", callback_data="rating:1"),
-            InlineKeyboardButton("⭐⭐", callback_data="rating:2"),
-            InlineKeyboardButton("⭐⭐⭐", callback_data="rating:3"),
-        ],
-        [
-            InlineKeyboardButton("⭐⭐⭐⭐", callback_data="rating:4"),
-            InlineKeyboardButton("⭐⭐⭐⭐⭐", callback_data="rating:5"),
-        ]
+        [InlineKeyboardButton("🆕 Новые", callback_data="filter_new")],
+        [InlineKeyboardButton("⏳ В работе", callback_data="filter_in_progress")],
+        [InlineKeyboardButton("⏰ Ожидают клиента", callback_data="filter_waiting_client")],
+        [InlineKeyboardButton("✅ Завершенные", callback_data="filter_completed")],
+        [InlineKeyboardButton("📋 Все заказы", callback_data="filter_all")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="admin_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_skip_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура с кнопкой Пропустить."""
-    keyboard = [[InlineKeyboardButton("⏩ Пропустить", callback_data="skip")]]
-    return InlineKeyboardMarkup(keyboard)
-
-
-# === АДМИН КЛАВИАТУРЫ ===
-
-def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
-    """Главное меню админа."""
-    keyboard = [
-        [InlineKeyboardButton("📋 Управление заказами", callback_data="admin:orders")],
-        [InlineKeyboardButton("👥 Список пользователей", callback_data="admin:users")],
-        [InlineKeyboardButton("📊 Статистика", callback_data="admin:stats")],
-        [InlineKeyboardButton("📢 Рассылка", callback_data="admin:broadcast")],
-        [InlineKeyboardButton("💰 Управление ценами", callback_data="admin:prices")],
-        [InlineKeyboardButton("❓ Управление FAQ", callback_data="admin:faq")],
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_admin_orders_keyboard() -> InlineKeyboardMarkup:
-    """Меню управления заказами."""
-    keyboard = [
-        [InlineKeyboardButton("🆕 Новые заказы", callback_data="admin:orders:new")],
-        [InlineKeyboardButton("⏳ В работе", callback_data="admin:orders:in_progress")],
-        [InlineKeyboardButton("✅ Завершенные", callback_data="admin:orders:completed")],
-        [InlineKeyboardButton("❌ Отмененные", callback_data="admin:orders:cancelled")],
-        [InlineKeyboardButton("⚠️ Зависшие заказы", callback_data="admin:orders:pending")],
-        [InlineKeyboardButton("⬅️ Назад", callback_data="admin:back")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_admin_order_actions_keyboard(order_id: int, current_status: str) -> InlineKeyboardMarkup:
-    """Действия над заказом."""
-    keyboard = []
-    
-    if current_status == 'new':
-        keyboard.append([InlineKeyboardButton("⏳ Взять в работу", callback_data=f"admin:order:in_progress:{order_id}")])
-    
-    if current_status == 'in_progress':
-        keyboard.append([InlineKeyboardButton("✅ Завершить", callback_data=f"admin:order:completed:{order_id}")])
-    
-    keyboard.append([InlineKeyboardButton("❌ Отменить", callback_data=f"admin:order:cancelled:{order_id}")])
-    keyboard.append([InlineKeyboardButton("📝 Добавить комментарий", callback_data=f"admin:order:note:{order_id}")])
-    keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="admin:orders")])
-    
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_pagination_keyboard(current_page: int, total_pages: int, callback_prefix: str) -> InlineKeyboardMarkup:
+# === ПАГИНАЦИЯ ===
+def get_pagination_keyboard(page: int, total_pages: int, prefix: str) -> InlineKeyboardMarkup:
     """Клавиатура пагинации."""
     keyboard = []
     
-    buttons = []
-    if current_page > 1:
-        buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"{callback_prefix}:{current_page-1}"))
+    nav_buttons = []
+    if page > 1:
+        nav_buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"{prefix}_page_{page-1}"))
     
-    buttons.append(InlineKeyboardButton(f"{current_page}/{total_pages}", callback_data="noop"))
+    nav_buttons.append(InlineKeyboardButton(f"{page}/{total_pages}", callback_data="current_page"))
     
-    if current_page < total_pages:
-        buttons.append(InlineKeyboardButton("➡️ Вперед", callback_data=f"{callback_prefix}:{current_page+1}"))
+    if page < total_pages:
+        nav_buttons.append(InlineKeyboardButton("➡️ Вперед", callback_data=f"{prefix}_page_{page+1}"))
     
-    if buttons:
-        keyboard.append(buttons)
+    keyboard.append(nav_buttons)
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_menu")])
     
     return InlineKeyboardMarkup(keyboard)
 
 
+# === ДЕТАЛИ ЗАКАЗА ===
+def get_order_details_keyboard(order_id: int, is_admin: bool = False) -> InlineKeyboardMarkup:
+    """Клавиатура деталей заказа."""
+    keyboard = []
+    
+    if is_admin:
+        keyboard.append([InlineKeyboardButton("✏️ Изменить статус", callback_data=f"change_status_{order_id}")])
+        keyboard.append([InlineKeyboardButton("💬 Добавить заметку", callback_data=f"add_note_{order_id}")])
+    else:
+        keyboard.append([InlineKeyboardButton("❌ Отменить заказ", callback_data=f"cancel_order_{order_id}")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="my_orders" if not is_admin else "orders_list")])
+    
+    return InlineKeyboardMarkup(keyboard)
+
+
+# === РЕЙТИНГ ===
+def get_rating_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура выбора рейтинга."""
+    keyboard = [
+        [
+            InlineKeyboardButton("⭐", callback_data="rating_1"),
+            InlineKeyboardButton("⭐⭐", callback_data="rating_2"),
+            InlineKeyboardButton("⭐⭐⭐", callback_data="rating_3"),
+        ],
+        [
+            InlineKeyboardButton("⭐⭐⭐⭐", callback_data="rating_4"),
+            InlineKeyboardButton("⭐⭐⭐⭐⭐", callback_data="rating_5"),
+        ],
+        [InlineKeyboardButton("🔙 Отмена", callback_data="cancel")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+# === ПОДТВЕРЖДЕНИЕ ===
+def get_confirmation_keyboard(action: str, item_id: int = None) -> InlineKeyboardMarkup:
+    """Клавиатура подтверждения действия."""
+    callback_yes = f"confirm_{action}_{item_id}" if item_id else f"confirm_{action}"
+    callback_no = f"cancel_{action}_{item_id}" if item_id else f"cancel_{action}"
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Да", callback_data=callback_yes),
+            InlineKeyboardButton("❌ Нет", callback_data=callback_no)
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+# === РАССЫЛКА ===
+def get_broadcast_keyboard(broadcast_id: int) -> InlineKeyboardMarkup:
+    """Клавиатура управления рассылкой."""
+    keyboard = [
+        [InlineKeyboardButton("📤 Отправить всем", callback_data=f"broadcast_send_{broadcast_id}")],
+        [InlineKeyboardButton("✏️ Редактировать", callback_data=f"broadcast_edit_{broadcast_id}")],
+        [InlineKeyboardButton("❌ Удалить", callback_data=f"broadcast_delete_{broadcast_id}")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="admin_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+# === FAQ КАТЕГОРИИ ===
+def get_faq_categories_keyboard(categories: List[str]) -> InlineKeyboardMarkup:
+    """Клавиатура категорий FAQ."""
+    keyboard = []
+    
+    for category in categories:
+        keyboard.append([InlineKeyboardButton(category, callback_data=f"faq_cat_{category}")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")])
+    
+    return InlineKeyboardMarkup(keyboard)
+
+
+# === КОНТАКТ (ЗАПРОС ТЕЛЕФОНА) ===
 def get_phone_request_keyboard() -> ReplyKeyboardMarkup:
-    """Клавиатура запроса телефона."""
-    keyboard = [[KeyboardButton("📞 Поделиться номером", request_contact=True)]]
+    """Клавиатура запроса номера телефона."""
+    keyboard = [
+        [KeyboardButton("📱 Отправить номер телефона", request_contact=True)],
+        ["🔙 Отмена"]
+    ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+
+
+# === ПРОПУСТИТЬ ШАГ ===
+def get_skip_keyboard() -> ReplyKeyboardMarkup:
+    """Клавиатура с кнопкой пропуска."""
+    keyboard = [["⏭ Пропустить"], ["🔙 Отмена"]]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+
+
+# === СПИСОК ПОЛЬЗОВАТЕЛЕЙ ===
+def get_user_details_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    """Клавиатура деталей пользователя."""
+    keyboard = [
+        [InlineKeyboardButton("📋 Заказы пользователя", callback_data=f"user_orders_{user_id}")],
+        [InlineKeyboardButton("📢 Отправить сообщение", callback_data=f"message_user_{user_id}")],
+        [InlineKeyboardButton("🚫 Заблокировать", callback_data=f"block_user_{user_id}")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="users_list")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
