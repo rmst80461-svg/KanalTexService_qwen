@@ -1,262 +1,472 @@
 """
-Telegram bot handler module
+Главный обработчик Telegram бота КаналТехСервис (структура ShveinyiHUB)
 """
-import asyncio
 import logging
-import re
-from datetime import datetime
-from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message
-from aiogram.fsm.state import State, StatesGroup
-from aiogram.fsm.context import FSMContext
-from aiogram.filters import Command
-from aiogram.enums import ParseMode
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+import os
+from telegram import Update, InputFile
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    filters
+)
+from telegram.constants import ParseMode
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.database import Database
 
+from .keyboards import (
+    get_main_menu,
+    get_persistent_menu,
+    get_services_menu,
+    get_prices_menu,
+    get_faq_menu,
+    get_back_button,
+    get_admin_main_menu,
+    get_admin_order_detail_keyboard,
+    get_admin_orders_submenu,
+    remove_keyboard
+)
 
-class RequestForm(StatesGroup):
-    waiting_for_full_name = State()
-    waiting_for_address = State()
-    waiting_for_service = State()
-    waiting_for_phone = State()
+logger = logging.getLogger(__name__)
 
 
 class TelegramBot:
+    """Telegram бот КаналТехСервис с адаптацией структуры ShveinyiHUB."""
+
     def __init__(self, db: 'Database'):
-        from app.config import BOT_TOKEN
-        self.bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
-        self.dp = Dispatcher()
+        from app.config import BOT_TOKEN, ADMIN_IDS
+        self.token = BOT_TOKEN
         self.db = db
-        
-        # Register handlers
-        self.register_handlers()
-    
-    def register_handlers(self):
-        """Register handlers"""
-        self.dp.message(Command("start"))(self.cmd_start)
-        self.dp.message(Command("help"))(self.cmd_help)
-        self.dp.message(Command("status"))(self.cmd_status)
-        self.dp.message(F.text == "Новая заявка")(self.process_new_request_command)
-        
-        # FSM handlers
-        self.dp.message(RequestForm.waiting_for_full_name)(self.process_full_name)
-        self.dp.message(RequestForm.waiting_for_address)(self.process_address)
-        self.dp.message(RequestForm.waiting_for_service)(self.process_service)
-        self.dp.message(RequestForm.waiting_for_phone)(self.process_phone)
-    
-    async def cmd_start(self, message: Message, state: FSMContext):
-        """Handle /start command"""
-        await state.clear()
+        self.admin_ids = ADMIN_IDS if ADMIN_IDS else []
+        self.application = None
+        self.logo_path = "assets/logo.jpg"
+
+    async def cmd_start(self, update: Update, context):
+        """Команда /start с логотипом и меню ShveinyiHUB структуры."""
+        user = update.effective_user
+        user_id = user.id
+
+        # Регистрируем пользователя
+        self.db.add_user(
+            user_id=user_id,
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name
+        )
+
         welcome_text = (
-            f"Добро пожаловать в систему подачи заявок <b>КаналТехСервис</b>, г. Ярцево!\n\n"
-            f"С помощью этого бота вы можете подать заявку на ассенизаторские услуги.\n\n"
-            f"Для начала работы нажмите кнопку <b>Новая заявка</b> или введите /help для справки."
+            f"🚚 <b>КаналТехСервис</b>, г. Ярцево\n\n"
+            f"Профессиональные ассенизаторские и сантехнические услуги\n\n"
+            f"<b>Работаем 24/7!</b>\n"
+            f"Быстрый выезд • Качественный результат • Справедливые цены\n\n"
+            f"Выберите действие ниже:"
         )
-        
-        # Keyboard with "New Request" button
-        keyboard = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="Новая заявка")]
-            ],
-            resize_keyboard=True
-        )
-        
-        await message.answer(welcome_text, reply_markup=keyboard)
-    
-    async def cmd_help(self, message: Message, state: FSMContext):
-        """Handle /help command"""
-        await state.clear()
-        help_text = (
-            "<b>КаналТехСервис, г. Ярцево</b>\n\n"
-            "Доступные команды:\n"
-            "/start - Начать работу с ботом\n"
-            "/help - Показать это сообщение\n"
-            "/status - Проверить статус вашей последней заявки\n\n"
-            "Чтобы подать новую заявку, нажмите кнопку <b>Новая заявка</b>"
-        )
-        await message.answer(help_text)
-    
-    async def cmd_status(self, message: Message):
-        """Handle /status command"""
-        user_id = message.from_user.id
-        
-        # Get user's latest request using the database class
-        # We'll fetch all requests and filter by user_id to use our existing methods
-        all_requests = self.db.get_all_requests()
-        user_requests = [req for req in all_requests if req[1] == user_id]  # Filter by user_id (index 1)
-        
-        if user_requests:
-            # Get the most recent request
-            latest_request = user_requests[0]  # Since they're ordered by date DESC
-            request_id, _, _, _, _, _, status, comment, created_at = latest_request
-            
-            status_text = f"Ваша последняя заявка №{request_id}:\n"
-            status_text += f"<b>Статус:</b> {status}\n"
-            status_text += f"<b>Дата создания:</b> {created_at}\n"
-            
-            if comment:
-                status_text += f"<b>Комментарий:</b> {comment}"
-            
-            await message.answer(status_text)
+
+        # Проверяем, админ ли это
+        if user_id in self.admin_ids:
+            welcome_text += f"\n\n👑 <b>Режим администратора активен</b>"
+            reply_markup = get_admin_main_menu()
         else:
-            await message.answer("У вас пока нет заявок в системе.")
-    
-    async def process_new_request_command(self, message: Message, state: FSMContext):
-        """Start new request process"""
-        user_id = message.from_user.id
-        
-        # Check if user has submitted a request within the last 24 hours
-        if self.db.get_user_last_request_within_24h(user_id):
-            await message.answer(
-                "Вы уже подавали заявку за последние 24 часа. "
-                "Подождите до истечения этого периода перед подачей новой заявки."
-            )
-            return
-        
-        await state.set_state(RequestForm.waiting_for_full_name)
-        await message.answer(
-            "Введите ваше полное имя (ФИО):"
-        )
-    
-    async def process_full_name(self, message: Message, state: FSMContext):
-        """Process entered full name"""
-        full_name = message.text.strip()
-        
-        if len(full_name.split()) < 2:
-            await message.answer("Пожалуйста, введите полное имя (ФИО):")
-            return
-        
-        await state.update_data(full_name=full_name)
-        await state.set_state(RequestForm.waiting_for_address)
-        
-        # Keyboard with address options
-        keyboard = ReplyKeyboardMarkup(
-            keyboard=[
-                [
-                    KeyboardButton(text="Ярцево"),
-                    KeyboardButton(text="Дачный посёлок")
-                ],
-                [
-                    KeyboardButton(text="п. Солнечный"),
-                    KeyboardButton(text="Другое")
-                ]
-            ],
-            resize_keyboard=True
-        )
-        
-        await message.answer(
-            "Выберите адрес выполнения работ:",
-            reply_markup=keyboard
-        )
-    
-    async def process_address(self, message: Message, state: FSMContext):
-        """Process selected address"""
-        address = message.text.strip()
-        
-        # Validate address
-        valid_addresses = ["Ярцево", "Дачный посёлок", "п. Солнечный", "Другое"]
-        if address not in valid_addresses:
-            await message.answer(
-                "Пожалуйста, выберите адрес из предложенных вариантов:"
-            )
-            return
-        
-        await state.update_data(address=address)
-        await state.set_state(RequestForm.waiting_for_service)
-        
-        # Keyboard with service options
-        keyboard = ReplyKeyboardMarkup(
-            keyboard=[
-                [
-                    KeyboardButton(text="Ассенизаторские услуги"),
-                    KeyboardButton(text="Вызов сантехника")
-                ],
-                [
-                    KeyboardButton(text="Прочистка труб"),
-                    KeyboardButton(text="Установка сантехники")
-                ]
-            ],
-            resize_keyboard=True
-        )
-        
-        await message.answer(
-            "Выберите тип услуги:",
-            reply_markup=keyboard
-        )
-    
-    async def process_service(self, message: Message, state: FSMContext):
-        """Process selected service type"""
-        service_type = message.text.strip()
-        
-        # Validate service type
-        valid_services = ["Ассенизаторские услуги", "Вызов сантехника", "Прочистка труб", "Установка сантехники"]
-        if service_type not in valid_services:
-            await message.answer(
-                "Пожалуйста, выберите тип услуги из предложенных вариантов:"
-            )
-            return
-        
-        await state.update_data(service_type=service_type)
-        await state.set_state(RequestForm.waiting_for_phone)
-        
-        # Remove keyboard after service selection
-        await message.answer(
-            "Введите ваш номер телефона в формате +7XXXXXXXXXX:",
-            reply_markup=ReplyKeyboardRemove()
-        )
-    
-    async def process_phone(self, message: Message, state: FSMContext):
-        """Process entered phone number"""
-        phone = message.text.strip()
-        
-        # Check phone number format
-        phone_pattern = r'^\+7\d{10}$'
-        if not re.match(phone_pattern, phone):
-            await message.answer(
-                "Неверный формат номера телефона. Введите номер в формате +7XXXXXXXXXX:"
-            )
-            return
-        
-        # Get data from state
-        data = await state.get_data()
-        user_id = message.from_user.id
-        full_name = data['full_name']
-        address = data['address']
-        service_type = data['service_type']
-        
-        # Create request in database
-        request_id = self.db.create_request(user_id, full_name, address, service_type, phone)
-        
-        # Clear state
-        await state.clear()
-        
-        # Send confirmation
-        success_message = (
-            f"Спасибо, <b>{full_name}</b>! Ваша заявка №{request_id} принята.\n\n"
-            f"Адрес: {address}\n"
-            f"Услуга: {service_type}\n"
-            f"Телефон: {phone}\n\n"
-            f"С вами свяжется наш специалист для уточнения деталей.\n\n"
-            f"Компания <b>КаналТехСервис</b>, г. Ярцево"
-        )
-        
-        await message.answer(success_message)
-    
-    async def send_status_update(self, user_id: int, request_id: int, new_status: str, comment: str = None):
-        """Send status update to user"""
+            reply_markup = get_persistent_menu()
+
+        # Отправляем логотип если существует
         try:
-            status_message = f"Статус вашей заявки №{request_id} обновлен: <b>{new_status}</b>"
-            if comment:
-                status_message += f"\nКомментарий: {comment}"
-            
-            await self.bot.send_message(user_id, status_message)
+            if os.path.exists(self.logo_path):
+                with open(self.logo_path, 'rb') as photo:
+                    await update.message.reply_photo(
+                        photo=photo,
+                        caption=welcome_text,
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=reply_markup
+                    )
+            else:
+                await update.message.reply_text(
+                    welcome_text,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=reply_markup
+                )
         except Exception as e:
-            logging.error(f"Error sending status update to user {user_id}: {e}")
-    
+            logger.error(f"Ошибка отправки логотипа: {e}")
+            await update.message.reply_text(
+                welcome_text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=reply_markup
+            )
+
+        # Если обычный пользователь, показываем inline меню
+        if user_id not in self.admin_ids:
+            await update.message.reply_text(
+                "<b>Главное меню:</b>",
+                parse_mode=ParseMode.HTML,
+                reply_markup=get_main_menu()
+            )
+
+    async def handle_menu_button(self, update: Update, context):
+        """Обработка кнопки ☰ Меню."""
+        await update.message.reply_text(
+            "<b>Главное меню КаналТехСервис:</b>",
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_main_menu()
+        )
+
+    async def handle_callback_query(self, update: Update, context):
+        """Обработка всех callback запросов."""
+        query = update.callback_query
+        await query.answer()
+        data = query.data
+        user_id = update.effective_user.id
+
+        try:
+            # Главное меню
+            if data == "back_menu":
+                await query.edit_message_text(
+                    "<b>Главное меню КаналТехСервис:</b>",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=get_main_menu()
+                )
+
+            # Услуги и цены
+            elif data == "services":
+                await query.edit_message_text(
+                    "📋 <b>Выберите категорию услуг:</b>",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=get_prices_menu()
+                )
+
+            # Создать заявку
+            elif data == "new_order":
+                context.user_data['step'] = 'select_service'
+                await query.message.reply_text(
+                    "<b>Выберите нужную услугу:</b>",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=get_services_menu()
+                )
+
+            # Проверка статуса
+            elif data == "check_status":
+                orders = self.db.get_user_orders(user_id)
+                if orders:
+                    text = "<b>📊 Ваши заявки:</b>\n\n"
+                    for i, order in enumerate(orders[:5], 1):
+                        status_emoji = {
+                            'new': '🆕',
+                            'in_progress': '🔄',
+                            'completed': '✅',
+                            'cancelled': '❌'
+                        }.get(order.get('status', 'new'), '❓')
+                        text += f"{status_emoji} Заявка #{i:04d} - {order.get('status', 'неизвестно')}\n"
+                    await query.edit_message_text(
+                        text,
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=get_back_button()
+                    )
+                else:
+                    await query.edit_message_text(
+                        "❌ У вас пока нет заявок.",
+                        reply_markup=get_back_button()
+                    )
+
+            # FAQ
+            elif data == "faq":
+                await query.edit_message_text(
+                    "❓ <b>Часто задаваемые вопросы:</b>",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=get_faq_menu()
+                )
+
+            # Контакты
+            elif data == "contacts":
+                contacts_text = (
+                    "📍 <b>КаналТехСервис</b>\n\n"
+                    "📞 Телефон: +7 (910) 555-84-14\n"
+                    "📧 Email: info@kanalteh.ru\n"
+                    "🌐 Сайт: kanalteh.ru\n\n"
+                    "⏰ Режим работы: 24/7\n"
+                    "🏠 Адрес: г. Ярцево, Смоленская область\n\n"
+                    "🚗 Зоны обслуживания:\n"
+                    "• г. Ярцево\n"
+                    "• Ярцевский район\n"
+                    "• Дачные поселки\n"
+                    "• п. Солнечный"
+                )
+                await query.edit_message_text(
+                    contacts_text,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=get_back_button()
+                )
+
+            # Обработка услуг для заказа
+            elif data.startswith("service_"):
+                service = data.replace("service_", "")
+                service_names = {
+                    "septic": "🚚 Откачка септика",
+                    "cleaning": "🚽 Прочистка канализации",
+                    "plumber": "🔧 Вызов сантехника",
+                    "installation": "💧 Установка септика",
+                    "video": "🔍 Видеодиагностика",
+                    "pipe_repair": "🛠 Ремонт труб",
+                    "flushing": "🧹 Промывка канализации",
+                    "other": "❓ Другое"
+                }
+                context.user_data['service_type'] = service
+                context.user_data['service_name'] = service_names.get(service, service)
+                
+                await query.message.reply_text(
+                    f"✅ Выбрана услуга: <b>{service_names.get(service, service)}</b>\n\n"
+                    f"📝 Введите адрес, где нужно выполнить работу:",
+                    parse_mode=ParseMode.HTML
+                )
+                context.user_data['step'] = 'enter_address'
+
+            # Показ цен по категориям
+            elif data.startswith("price_"):
+                await self.show_prices(query, data)
+
+            # FAQ ответы
+            elif data.startswith("faq_"):
+                await self.show_faq_answer(query, data)
+
+            # Админ callbacks
+            elif data.startswith("admin_") or data.startswith("status_"):
+                await self.handle_admin_callbacks(query, context, data)
+
+        except Exception as e:
+            logger.error(f"Ошибка обработки callback: {e}")
+            await query.answer("❌ Произошла ошибка", show_alert=True)
+
+    async def show_prices(self, query, category_data):
+        """Показать цены по категориям услуг."""
+        category = category_data.replace("price_", "")
+        
+        prices_data = {
+            "septic": (
+                "🚚 <b>Откачка септика:</b>\n\n"
+                "💰 Стоимость:\n"
+                "• До 5м³ - 2 500₽\n"
+                "• До 10м³ - 4 500₽\n"
+                "• Свыше 10м³ - от 6 000₽\n\n"
+                "⏰ Срок: 1-2 часа после вызова\n"
+                "✅ Гарантия: 6 месяцев"
+            ),
+            "cleaning": (
+                "🚽 <b>Прочистка канализации:</b>\n\n"
+                "💰 Стоимость:\n"
+                "• Механическая - от 1 500₽\n"
+                "• Гидродинамическая - от 3 000₽\n"
+                "• Устранение засора - от 1 000₽\n\n"
+                "⏰ Срок: в день вызова\n"
+                "✅ Гарантия: результат"
+            ),
+            "plumbing": (
+                "🔧 <b>Сантехнические работы:</b>\n\n"
+                "💰 Стоимость:\n"
+                "• Вызов мастера - 500₽\n"
+                "• Замена смесителя - от 800₽\n"
+                "• Установка унитаза - от 1 500₽\n"
+                "• Замена труб - от 2 000₽\n\n"
+                "⏰ Срок: 2-4 часа\n"
+                "✅ Гарантия: 6 месяцев"
+            ),
+            "installation": (
+                "💧 <b>Установка септика:</b>\n\n"
+                "💰 Стоимость:\n"
+                "• Консультация - бесплатно\n"
+                "• Установка под ключ - от 45 000₽\n"
+                "• Монтаж дренажа - от 15 000₽\n\n"
+                "⏰ Срок: 2-3 дня\n"
+                "✅ Гарантия: 1 год"
+            ),
+            "diagnostics": (
+                "🔍 <b>Видеодиагностика труб:</b>\n\n"
+                "💰 Стоимость:\n"
+                "• Видеоинспекция - от 3 000₽\n"
+                "• Составление акта - 500₽\n"
+                "• Выезд специалиста - 1 000₽\n\n"
+                "⏰ Срок: до 4 часов\n"
+                "✅ Результат: готовый отчет"
+            ),
+            "repair": (
+                "🛠 <b>Ремонт канализации:</b>\n\n"
+                "💰 Стоимость:\n"
+                "• Замена участка трубы - от 2 000₽\n"
+                "• Герметизация стыков - от 800₽\n"
+                "• Ремонт колодца - от 5 000₽\n\n"
+                "⏰ Срок: 3-5 часов\n"
+                "✅ Гарантия: 6 месяцев"
+            )
+        }
+
+        text = prices_data.get(category, "ℹ️ Информация временно недоступна")
+        text += "\n\n💡 <i>Точную стоимость уточняйте при заказе</i>"
+
+        await query.edit_message_text(
+            text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_back_button()
+        )
+
+    async def show_faq_answer(self, query, faq_data):
+        """Показать ответ на FAQ вопрос."""
+        faq_type = faq_data.replace("faq_", "")
+        
+        faq_answers = {
+            "services": (
+                "📋 <b>Какие услуги мы предоставляем?</b>\n\n"
+                "✓ Откачка септиков и выгребных ям\n"
+                "✓ Прочистка канализации (все методы)\n"
+                "✓ Сантехнические работы\n"
+                "✓ Установка и замена септиков\n"
+                "✓ Видеодиагностика труб\n"
+                "✓ Ремонт канализации\n"
+                "✓ Промывка систем\n\n"
+                "💼 Профессиональная бригада с опытом 15+ лет"
+            ),
+            "prices": (
+                "💰 <b>Цены на услуги:</b>\n\n"
+                "Откачка септика - от 2 500₽\n"
+                "Прочистка канализации - от 1 500₽\n"
+                "Вызов сантехника - от 500₽\n"
+                "Установка септика - от 45 000₽\n"
+                "Видеодиагностика - от 3 000₽\n\n"
+                "📝 <i>Скидки на постоянных клиентов до 15%</i>"
+            ),
+            "timing": (
+                "⏰ <b>Сроки выполнения:</b>\n\n"
+                "🚨 Экстренный выезд - 1-2 часа\n"
+                "📅 Плановые работы - в день вызова\n"
+                "🏗 Установка септика - 2-3 дня\n"
+                "📋 Диагностика - до 4 часов\n\n"
+                "24/7 готовы помочь в любой момент!"
+            ),
+            "location": (
+                "📍 <b>Адрес и график:</b>\n\n"
+                "Режим работы: 24/7 (без выходных)\n"
+                "Город: Ярцево, Смоленская область\n\n"
+                "📞 Телефон: +7 (910) 555-84-14\n"
+                "📧 Email: info@kanalteh.ru\n\n"
+                "🚗 Выезжаем во все районы города и области"
+            ),
+            "payment": (
+                "💳 <b>Оплата и гарантия:</b>\n\n"
+                "Принимаем:\n"
+                "✓ Наличные\n"
+                "✓ Карты (все системы)\n"
+                "✓ Безналичный расчет\n"
+                "✓ Сбербанк\n\n"
+                "✅ Гарантия на работы: 6 месяцев\n"
+                "📜 Работаем по договору"
+            ),
+            "order": (
+                "📝 <b>Как оформить заявку?</b>\n\n"
+                "1️⃣ Нажмите кнопку 'Создать заявку'\n"
+                "2️⃣ Выберите нужную услугу\n"
+                "3️⃣ Укажите адрес выполнения работ\n"
+                "4️⃣ Оставьте номер телефона\n"
+                "5️⃣ Подтвердите заявку\n\n"
+                "☎️ Мы свяжемся с вами в течение 30 минут!"
+            ),
+            "zones": (
+                "🚗 <b>Зоны обслуживания:</b>\n\n"
+                "✓ г. Ярцево\n"
+                "✓ Ярцевский район\n"
+                "✓ Дачные поселки\n"
+                "✓ п. Солнечный\n"
+                "✓ Окрестные деревни\n\n"
+                "🌍 Выезд за город - по договоренности\n"
+                "💚 Кольцевая дорога - без доплаты"
+            ),
+            "other": (
+                "❓ <b>Не нашли ответ?</b>\n\n"
+                "☎️ Позвоните нам:\n"
+                "+7 (910) 555-84-14\n\n"
+                "📧 Напишите на email:\n"
+                "info@kanalteh.ru\n\n"
+                "💬 Или напишите в чат - ответим за 5 минут!"
+            )
+        }
+
+        text = faq_answers.get(faq_type, "ℹ️ Информация временно недоступна.")
+        await query.edit_message_text(
+            text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_back_button()
+        )
+
+    async def handle_admin_callbacks(self, query, context, data):
+        """Обработка админ-функций."""
+        user_id = query.from_user.id
+        if user_id not in self.admin_ids:
+            await query.answer("❌ Доступ запрещен", show_alert=True)
+            return
+
+        if data == "admin_back_menu":
+            await query.edit_message_text(
+                "👑 <b>Админ-панель КаналТехСервис</b>",
+                parse_mode=ParseMode.HTML,
+                reply_markup=get_admin_main_menu()
+            )
+
+        elif data.startswith("admin_orders_"):
+            status = data.replace("admin_orders_", "")
+            await query.edit_message_text(
+                f"📋 <b>Заявки со статусом: {status}</b>\n\n<i>Функция в разработке</i>",
+                parse_mode=ParseMode.HTML,
+                reply_markup=get_admin_orders_submenu()
+            )
+
+    async def send_notification(self, user_id: int, order_id: int, new_status: str, comment: str = None):
+        """Отправить уведомление об изменении статуса."""
+        try:
+            status_emoji = {
+                'new': '🆕',
+                'in_progress': '🔄',
+                'completed': '✅',
+                'cancelled': '❌'
+            }.get(new_status, '❓')
+
+            text = f"📌 <b>Обновление статуса заявки</b>\n\n{status_emoji} Новый статус: <b>{new_status}</b>"
+            if comment:
+                text += f"\n\n💬 Комментарий: {comment}"
+
+            if self.application:
+                await self.application.bot.send_message(
+                    chat_id=user_id,
+                    text=text,
+                    parse_mode=ParseMode.HTML
+                )
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления: {e}")
+
+    def setup_handlers(self):
+        """Регистрация всех обработчиков."""
+        # /start
+        self.application.add_handler(CommandHandler("start", self.cmd_start))
+        
+        # Кнопка меню
+        self.application.add_handler(
+            MessageHandler(filters.Regex("^☰ Меню$"), self.handle_menu_button)
+        )
+        
+        # Callbacks
+        self.application.add_handler(
+            CallbackQueryHandler(self.handle_callback_query)
+        )
+        
+        logger.info("✅ Обработчики зарегистрированы")
+
     async def run(self):
-        """Run the bot"""
-        await self.dp.start_polling(self.bot)
+        """Запуск бота."""
+        self.application = Application.builder().token(self.token).build()
+        self.setup_handlers()
+        
+        logger.info("
+🚀 Бот КаналТехСервис запущен")
+        logger.info("📍 Структура: ShveinyiHUB")
+        logger.info("🔧 Услуги: Ассенизаторские")
+        logger.info("📞 Телефон: +7 (910) 555-84-14")
+        logger.info("⏰ Режим: 24/7")
+        
+        await self.application.run_polling()
