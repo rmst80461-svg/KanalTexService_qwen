@@ -50,7 +50,28 @@ For production deployment, use gunicorn:
 gunicorn --bind 0.0.0.0:5000 --reuse-port "app.web.routes:create_app(None, None)"
 ```
 
+## Admin Panel Features
+- View orders by status (new, in progress, completed, cancelled)
+- Change order status with inline buttons
+- Forward orders to executors by Telegram ID
+- Delete orders
+- View client order history
+- Broadcast messages to all users
+- Settings panel with executor and price info
+
+## Bot Features
+- AI assistant "Аква" (female voice) guides customers
+- Service selection and order placement
+- Order confirmation with address, phone, optional comment
+- Status notifications to customers
+
 ## Recent Changes
+- Added full admin panel with order management
+- Broadcast messaging to all users
+- Order deletion functionality
+- Client order history viewing
+- Settings panel for executors and prices
+- Executor forwarding system with "Take to work" button
 - Configured for Replit environment
 - Flask runs on port 5000
 - Application works in web-only mode if BOT_TOKEN is not provided

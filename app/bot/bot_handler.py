@@ -151,7 +151,11 @@ class TelegramBot:
             ])
         
         buttons.append([
-            InlineKeyboardButton("📞 Позвонить клиенту", callback_data=f"call_client_{order_id}")
+            InlineKeyboardButton("📞 Позвонить клиенту", callback_data=f"call_client_{order_id}"),
+            InlineKeyboardButton("📜 История", callback_data=f"client_history_{order_id}")
+        ])
+        buttons.append([
+            InlineKeyboardButton("🗑 Удалить", callback_data=f"delete_order_{order_id}")
         ])
         
         return InlineKeyboardMarkup(buttons)
@@ -220,15 +224,24 @@ class TelegramBot:
             )
         
         elif text == "📢 Рассылка":
+            context.user_data['step'] = 'enter_broadcast'
             await update.message.reply_text(
-                "📢 <b>Рассылка:</b>\n\n<i>Функция в разработке</i>",
+                "📢 <b>Рассылка сообщений</b>\n\n"
+                "Напишите текст сообщения для рассылки всем пользователям.\n\n"
+                "Отправьте /cancel для отмены.",
                 parse_mode=ParseMode.HTML
             )
         
         elif text == "⚙️ Настройки":
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("👷 Исполнители", callback_data="settings_executors")],
+                [InlineKeyboardButton("💰 Редактировать цены", callback_data="settings_prices")],
+            ])
             await update.message.reply_text(
-                "⚙️ <b>Настройки:</b>\n\n<i>Функция в разработке</i>",
-                parse_mode=ParseMode.HTML
+                "⚙️ <b>Настройки бота:</b>",
+                parse_mode=ParseMode.HTML,
+                reply_markup=keyboard
             )
         
         elif text == "◀️ Выйти":
@@ -245,6 +258,39 @@ class TelegramBot:
         step = context.user_data.get('step')
         
         logger.info(f"Text input from {user_id}: '{text}', step: {step}")
+        
+        # Обработка рассылки
+        if step == 'enter_broadcast':
+            if text == '/cancel':
+                context.user_data.clear()
+                await update.message.reply_text("❌ Рассылка отменена", parse_mode=ParseMode.HTML)
+                return
+            
+            users = self.db.get_all_users()
+            sent = 0
+            failed = 0
+            
+            await update.message.reply_text(f"📤 Начинаю рассылку {len(users)} пользователям...", parse_mode=ParseMode.HTML)
+            
+            for user in users:
+                try:
+                    await self.application.bot.send_message(
+                        chat_id=user['user_id'],
+                        text=f"📢 <b>Уведомление от КаналТехСервис:</b>\n\n{text}",
+                        parse_mode=ParseMode.HTML
+                    )
+                    sent += 1
+                except Exception:
+                    failed += 1
+            
+            context.user_data.clear()
+            await update.message.reply_text(
+                f"✅ Рассылка завершена!\n\n"
+                f"📨 Отправлено: {sent}\n"
+                f"❌ Ошибок: {failed}",
+                parse_mode=ParseMode.HTML
+            )
+            return
         
         # Обработка ввода ID исполнителя
         if step == 'enter_executor_id':
@@ -522,6 +568,76 @@ class TelegramBot:
                         )
                     except:
                         pass
+
+            # Удаление заявки
+            elif data.startswith("delete_order_"):
+                order_id = int(data.replace("delete_order_", ""))
+                self.db.delete_order(order_id)
+                await query.edit_message_text(
+                    f"🗑 <b>Заявка #{order_id} удалена</b>",
+                    parse_mode=ParseMode.HTML
+                )
+                await query.answer("Заявка удалена")
+            
+            # Настройки
+            elif data == "settings_executors":
+                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("◀️ Назад", callback_data="settings_back")]
+                ])
+                await query.edit_message_text(
+                    "👷 <b>Исполнители</b>\n\n"
+                    "Для добавления исполнителя:\n"
+                    "1. Пусть он напишет боту /start\n"
+                    "2. При пересылке заявки введите его Telegram ID\n\n"
+                    "Узнать ID исполнителя можно через @userinfobot",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=keyboard
+                )
+            
+            elif data == "settings_prices":
+                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("◀️ Назад", callback_data="settings_back")]
+                ])
+                await query.edit_message_text(
+                    "💰 <b>Редактирование цен</b>\n\n"
+                    "Цены настраиваются в файле app/config/__init__.py\n"
+                    "Свяжитесь с разработчиком для изменения.",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=keyboard
+                )
+            
+            elif data == "settings_back":
+                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("👷 Исполнители", callback_data="settings_executors")],
+                    [InlineKeyboardButton("💰 Редактировать цены", callback_data="settings_prices")],
+                ])
+                await query.edit_message_text(
+                    "⚙️ <b>Настройки бота:</b>",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=keyboard
+                )
+            
+            # Просмотр истории клиента
+            elif data.startswith("client_history_"):
+                order_id = int(data.replace("client_history_", ""))
+                order = self.db.get_order_by_id(order_id)
+                if order:
+                    client_id = order.get('user_id')
+                    orders = self.db.get_user_orders(client_id)
+                    if orders:
+                        text = f"📋 <b>История заявок клиента:</b>\n\n"
+                        for o in orders[:5]:
+                            status_emoji = {'new': '🆕', 'in_progress': '🔄', 'completed': '✅', 'cancelled': '❌'}.get(o.get('status', ''), '❓')
+                            text += f"{status_emoji} #{o.get('order_id')} - {o.get('service_type', '?')}\n"
+                        await query.answer()
+                        await query.message.reply_text(text, parse_mode=ParseMode.HTML)
+                    else:
+                        await query.answer("У клиента нет других заявок", show_alert=True)
+                else:
+                    await query.answer("Заявка не найдена", show_alert=True)
 
             # Админ callbacks
             elif data.startswith("admin_") or data.startswith("status_"):

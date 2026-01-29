@@ -152,15 +152,16 @@ def get_admin_order_detail_keyboard(order_id: int, order_status: str) -> InlineK
         ])
     elif order_status == 'completed':
         buttons.append([
-            InlineKeyboardButton("🗑 Удалить", callback_data=f"status_deleted_{order_id}")
+            InlineKeyboardButton("🗑 Удалить", callback_data=f"delete_order_{order_id}")
         ])
     else:
         buttons.append([
-            InlineKeyboardButton("🗑 Удалить заявку", callback_data=f"status_deleted_{order_id}")
+            InlineKeyboardButton("🗑 Удалить заявку", callback_data=f"delete_order_{order_id}")
         ])
 
     buttons.append([
-        InlineKeyboardButton("✉️ Написать клиенту", callback_data=f"contact_client_{order_id}")
+        InlineKeyboardButton("✉️ Написать клиенту", callback_data=f"contact_client_{order_id}"),
+        InlineKeyboardButton("📜 История", callback_data=f"client_history_{order_id}")
     ])
 
     back_data = {

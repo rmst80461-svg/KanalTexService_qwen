@@ -178,3 +178,29 @@ class Database:
         row = cursor.fetchone()
         conn.close()
         return dict(row) if row else None
+    
+    def get_all_users(self) -> List[Dict]:
+        """Get all users"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM users')
+        users = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return users
+    
+    def delete_order(self, order_id: int):
+        """Delete order"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM orders WHERE order_id = ?', (order_id,))
+        conn.commit()
+        conn.close()
+    
+    def get_user_by_id(self, user_id: int) -> Optional[Dict]:
+        """Get user by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
