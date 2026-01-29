@@ -123,6 +123,79 @@ class TelegramBot:
             reply_markup=get_main_menu()
         )
 
+    async def handle_admin_text_buttons(self, update: Update, context):
+        """Обработка текстовых кнопок админ-меню."""
+        text = update.message.text
+        user_id = update.effective_user.id
+        
+        if user_id not in self.admin_ids:
+            await update.message.reply_text("❌ Доступ запрещен")
+            return
+        
+        status_map = {
+            "📋 Новые заявки": "new",
+            "⏳ В работе": "in_progress",
+            "✅ Выполнены": "completed",
+            "📊 Все заявки": "all"
+        }
+        
+        if text in status_map:
+            status = status_map[text]
+            orders = self.db.get_all_orders() if status == "all" else self.db.get_orders_by_status(status)
+            
+            if orders:
+                response = f"📋 <b>{text}:</b>\n\n"
+                for order in orders[:10]:
+                    order_id = order.get('order_id', '?')
+                    service = order.get('service_type', 'Не указана')
+                    address = order.get('address', 'Не указан')
+                    phone = order.get('phone', 'Не указан')
+                    order_status = order.get('status', 'new')
+                    status_emoji = {'new': '🆕', 'in_progress': '🔄', 'completed': '✅', 'cancelled': '❌'}.get(order_status, '❓')
+                    response += f"{status_emoji} <b>#{order_id}</b> | {service}\n📍 {address}\n📞 {phone}\n\n"
+            else:
+                response = f"📋 <b>{text}:</b>\n\n<i>Заявок нет</i>"
+            
+            await update.message.reply_text(response, parse_mode=ParseMode.HTML)
+        
+        elif text == "📈 Статистика":
+            stats = self.db.get_stats()
+            response = (
+                f"📊 <b>Статистика:</b>\n\n"
+                f"🆕 Новых: {stats.get('new', 0)}\n"
+                f"🔄 В работе: {stats.get('in_progress', 0)}\n"
+                f"✅ Выполнено: {stats.get('completed', 0)}\n"
+                f"❌ Отменено: {stats.get('cancelled', 0)}\n\n"
+                f"📊 Всего: {stats.get('total', 0)}"
+            )
+            await update.message.reply_text(response, parse_mode=ParseMode.HTML)
+        
+        elif text == "👥 Пользователи":
+            users_count = self.db.get_users_count()
+            await update.message.reply_text(
+                f"👥 <b>Пользователи:</b>\n\nВсего: {users_count}",
+                parse_mode=ParseMode.HTML
+            )
+        
+        elif text == "📢 Рассылка":
+            await update.message.reply_text(
+                "📢 <b>Рассылка:</b>\n\n<i>Функция в разработке</i>",
+                parse_mode=ParseMode.HTML
+            )
+        
+        elif text == "⚙️ Настройки":
+            await update.message.reply_text(
+                "⚙️ <b>Настройки:</b>\n\n<i>Функция в разработке</i>",
+                parse_mode=ParseMode.HTML
+            )
+        
+        elif text == "◀️ Выйти":
+            await update.message.reply_text(
+                "👋 Вы вышли из админ-панели",
+                parse_mode=ParseMode.HTML,
+                reply_markup=get_persistent_menu()
+            )
+
     async def handle_text_input(self, update: Update, context):
         """Обработка текстового ввода для заказа."""
         text = update.message.text
@@ -622,6 +695,14 @@ class TelegramBot:
         # Кнопка меню
         self.application.add_handler(
             MessageHandler(filters.Regex("^☰ Меню$"), self.handle_menu_button)
+        )
+        
+        # Админ кнопки
+        admin_buttons = ["📋 Новые заявки", "⏳ В работе", "✅ Выполнены", "📊 Все заявки", 
+                         "📈 Статистика", "👥 Пользователи", "📢 Рассылка", "⚙️ Настройки", "◀️ Выйти"]
+        admin_pattern = "^(" + "|".join(admin_buttons) + ")$"
+        self.application.add_handler(
+            MessageHandler(filters.Regex(admin_pattern), self.handle_admin_text_buttons)
         )
         
         # Callbacks

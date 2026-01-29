@@ -126,3 +126,46 @@ class Database:
         
         conn.commit()
         conn.close()
+    
+    def get_all_orders(self) -> List[Dict]:
+        """Get all orders"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM orders ORDER BY created_at DESC')
+        orders = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return orders
+    
+    def get_orders_by_status(self, status: str) -> List[Dict]:
+        """Get orders by status"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM orders WHERE status = ? ORDER BY created_at DESC', (status,))
+        orders = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return orders
+    
+    def get_stats(self) -> Dict:
+        """Get order statistics"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        stats = {'new': 0, 'in_progress': 0, 'completed': 0, 'cancelled': 0, 'total': 0}
+        cursor.execute('SELECT status, COUNT(*) as cnt FROM orders GROUP BY status')
+        for row in cursor.fetchall():
+            stats[row['status']] = row['cnt']
+        
+        cursor.execute('SELECT COUNT(*) as total FROM orders')
+        stats['total'] = cursor.fetchone()['total']
+        
+        conn.close()
+        return stats
+    
+    def get_users_count(self) -> int:
+        """Get total users count"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) as cnt FROM users')
+        count = cursor.fetchone()['cnt']
+        conn.close()
+        return count
