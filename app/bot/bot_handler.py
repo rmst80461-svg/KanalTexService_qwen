@@ -268,22 +268,32 @@ class TelegramBot:
                 service_names = {
                     "septic": "🚚 Откачка септика",
                     "cleaning": "🚽 Прочистка канализации",
-                    "plumber": "🔧 Вызов сантехника",
-                    "installation": "💧 Установка септика",
                     "video": "🔍 Видеодиагностика",
-                    "pipe_repair": "🛠 Ремонт труб",
                     "flushing": "🧹 Промывка канализации",
                     "other": "❓ Другое"
                 }
-                context.user_data['service_type'] = service
-                context.user_data['service_name'] = service_names.get(service, service)
                 
-                await query.message.reply_text(
-                    f"✅ Выбрана услуга: <b>{service_names.get(service, service)}</b>\n\n"
-                    f"📝 Введите адрес, где нужно выполнить работу:",
-                    parse_mode=ParseMode.HTML
-                )
-                context.user_data['step'] = 'enter_address'
+                if service == "other":
+                    context.user_data['step'] = 'ai_chat'
+                    await query.message.reply_text(
+                        "👋 Здравствуйте!\n\n"
+                        "Опишите, пожалуйста, вашу проблему или задайте вопрос — "
+                        "мы с радостью поможем разобраться.\n\n"
+                        "💡 Наш помощник ответит на ваши вопросы об услугах, "
+                        "ценах и сроках выполнения работ.",
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=get_back_button()
+                    )
+                else:
+                    context.user_data['service_type'] = service
+                    context.user_data['service_name'] = service_names.get(service, service)
+                    
+                    await query.message.reply_text(
+                        f"✅ Выбрана услуга: <b>{service_names.get(service, service)}</b>\n\n"
+                        f"📝 Введите адрес, где нужно выполнить работу:",
+                        parse_mode=ParseMode.HTML
+                    )
+                    context.user_data['step'] = 'enter_address'
 
             # Показ цен по категориям
             elif data.startswith("price_"):
