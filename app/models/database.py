@@ -204,3 +204,12 @@ class Database:
         row = cursor.fetchone()
         conn.close()
         return dict(row) if row else None
+    
+    def get_orders_count_by_phone(self) -> Dict[str, int]:
+        """Get order count for each phone number"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT phone, COUNT(*) as cnt FROM orders GROUP BY phone')
+        result = {row['phone']: row['cnt'] for row in cursor.fetchall()}
+        conn.close()
+        return result

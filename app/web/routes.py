@@ -75,17 +75,19 @@ def create_app(db: 'Database', bot: Optional['TelegramBot'] = None) -> Flask:
     @app.route('/api/orders')
     @api_auth_required
     def get_orders():
-        """Get all orders with stats"""
+        """Get all orders with stats and client analysis"""
         if db is None:
-            return jsonify({"orders": [], "stats": {}})
+            return jsonify({"orders": [], "stats": {}, "phone_counts": {}})
         
         orders = db.get_all_orders()
         stats = db.get_stats()
         stats['users'] = db.get_users_count()
+        phone_counts = db.get_orders_count_by_phone()
         
         return jsonify({
             "orders": orders,
-            "stats": stats
+            "stats": stats,
+            "phone_counts": phone_counts
         })
     
     @app.route('/api/orders/<int:order_id>/status', methods=['POST'])
