@@ -99,7 +99,7 @@ class TelegramBot:
         # Если обычный пользователь, показываем inline меню
         if user_id not in self.admin_ids:
             await update.message.reply_text(
-                "<b>Главное меню:</b>",
+                "<b>🔽 Главное меню КаналТехСервис:</b>",
                 parse_mode=ParseMode.HTML,
                 reply_markup=get_main_menu()
             )
@@ -107,7 +107,7 @@ class TelegramBot:
     async def handle_menu_button(self, update: Update, context):
         """Обработка кнопки ☰ Меню."""
         await update.message.reply_text(
-            "<b>Главное меню КаналТехСервис:</b>",
+            "<b>🔽 Главное меню КаналТехСервис:</b>",
             parse_mode=ParseMode.HTML,
             reply_markup=get_main_menu()
         )
@@ -123,7 +123,7 @@ class TelegramBot:
             # Главное меню
             if data == "back_menu":
                 await query.edit_message_text(
-                    "<b>Главное меню КаналТехСервис:</b>",
+                    "<b>🔽 Главное меню КаналТехСервис:</b>",
                     parse_mode=ParseMode.HTML,
                     reply_markup=get_main_menu()
                 )
@@ -462,8 +462,7 @@ class TelegramBot:
         self.application = Application.builder().token(self.token).build()
         self.setup_handlers()
         
-        logger.info("
-🚀 Бот КаналТехСервис запущен")
+        logger.info("🚀 Бот КаналТехСервис запущен")
         logger.info("📍 Структура: ShveinyiHUB")
         logger.info("🔧 Услуги: Ассенизаторские")
         logger.info("📞 Телефон: +7 (910) 555-84-14")
