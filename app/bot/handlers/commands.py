@@ -1,6 +1,8 @@
-"""Команды бота."""
+"""Обработчики команд бота."""
 from telegram import Update
 from telegram.ext import ContextTypes
+from app.bot.keyboards import get_main_menu, get_back_button
+from app.models.database import Database
 import os
 import logging
 
@@ -8,129 +10,116 @@ logger = logging.getLogger(__name__)
 
 COMPANY_INFO = {
     "name": "КаналТехСервис",
-    "phone": "+7 (XXX) XXX-XX-XX",  # Замените на реальный
-    "address": "г. Москва и МО",  # Замените на реальный
-    "hours": "Круглосуточно",
+    "phone": "+7 (XXX) XXX-XX-XX",
+    "email": "info@kanalteh.ru",
+    "address": "Москва и Московская область",
+    "hours": "Круглосуточно, 24/7"
 }
 
+LOGO_PATH = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'assets', 'logo.jpg')
+
+db = Database()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /start."""
-    from app.bot.keyboards import get_main_menu
-    from app.models.database import Database
-    
+    """Обработчик команды /start."""
     user = update.effective_user
+    user_id = user.id
     
-    # Добавляем пользователя в БД
-    db = Database()
-    db.add_user(
-        user_id=user.id,
-        username=user.username,
-        first_name=user.first_name,
-        last_name=user.last_name
-    )
-    db.update_user_activity(user.id)
+    # Регистрируем пользователя
+    db.add_user(user_id, user.username, user.first_name, user.last_name)
+    db.update_user_activity(user_id)
     
-    name = user.first_name or "Друг"
+    name = user.first_name or "друг"
+    caption = f"🚿 *КаналТехСервис*\n\nЗдравствуйте, {name}!\nЧем могу помочь?"
     
-    # Проверяем, есть ли логотип
-    logo_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "assets", "logo.jpg")
-    
-    text = (
-        f"💧 *КаналТехСервис*\n\n"
-        f"Здравствуйте, {name}!\n\n"
-        f"Мы предоставляем полный спектр ассенизаторских услуг:\n"
-        "• Откачка септиков\n"
-        "• Прочистка канализации\n"
-        "• Ремонт труб\n"
-        "• Видеодиагностика\n\n"
-        "🕰 Работаем круглосуточно!\n"
-        "🚛 Выезд в течение 1-2 часов!"
-    )
-    
-    if os.path.exists(logo_path):
-        with open(logo_path, "rb") as photo:
-            await update.message.reply_photo(
-                photo=photo,
-                caption=text,
-                parse_mode="Markdown"
-            )
+    # Отправляем логотип если есть
+    if os.path.exists(LOGO_PATH):
+        try:
+            with open(LOGO_PATH, 'rb') as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=caption,
+                    parse_mode="Markdown"
+                )
+        except:
+            await update.message.reply_text(caption, parse_mode="Markdown")
     else:
-        await update.message.reply_text(text, parse_mode="Markdown")
+        await update.message.reply_text(caption, parse_mode="Markdown")
     
     await update.message.reply_text(
-        "💧 *КаналТехСервис — Главное меню*",
+        "🚿 *КаналТехСервис* — Главное меню",
         reply_markup=get_main_menu(),
         parse_mode="Markdown"
     )
 
-
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /help."""
-    text = (
-        "🆘 *Справка по боту*\n\n"
+    """Обработчик команды /help."""
+    help_text = (
+        "ℹ️ *Справка по боту КаналТехСервис*\n\n"
         "*Доступные команды:*\n"
-        "/start — Главное меню\n"
-        "/order — Создать заказ\n"
-        "/status — Проверить статус заказа\n"
-        "/services — Услуги и цены\n"
-        "/faq — Частые вопросы\n"
-        "/contact — Контакты\n\n"
-        "*Как сделать заказ:*\n"
-        "1. Нажмите /order\n"
-        "2. Выберите услугу\n"
-        "3. Опишите проблему\n"
-        "4. Отправьте фото (опционально)\n"
-        "5. Укажите контакты\n\n"
-        f"📞 *Связь:* {COMPANY_INFO['phone']}"
+        "/start - Главное меню\n"
+        "/order - Оформить заявку\n"
+        "/services - Услуги и цены\n"
+        "/status - Статус заявки\n"
+        "/faq - Частые вопросы\n"
+        "/contact - Контакты\n"
+        "/help - Эта справка\n\n"
+        "*Наши услуги:*\n"
+        "🚿 Откачка септиков и выгребных ям\n"
+        "🔧 Прочистка канализации\n"
+        "💧 Устранение засоров\n"
+        "🌊 Промывка труб\n"
+        "⚙️ Обслуживание септиков\n"
+        "🌧 Ливневая канализация\n"
+        "📹 Видеодиагностика\n"
+        "🔨 Ремонт систем\n\n"
+        f"📞 Телефон: {COMPANY_INFO['phone']}\n"
+        f"⏰ Режим работы: {COMPANY_INFO['hours']}"
     )
     
-    await update.message.reply_text(text, parse_mode="Markdown")
-
-
-async def faq_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /faq."""
-    from app.bot.keyboards import get_faq_menu
-    
-    text = "❓ *Частые вопросы*\n\nВыберите интересующий вопрос:"
-    
     await update.message.reply_text(
-        text=text,
-        reply_markup=get_faq_menu(),
+        help_text,
+        reply_markup=get_back_button(),
         parse_mode="Markdown"
     )
 
+async def faq_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /faq."""
+    from app.bot.keyboards import get_faq_menu
+    
+    if update.message:
+        await update.message.reply_text(
+            "❓ Выберите интересующий вопрос:",
+            reply_markup=get_faq_menu()
+        )
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /status - проверка статуса заказов."""
-    from app.models.database import Database
-    from app.bot.handlers.orders import format_order_id
-    
-    db = Database()
+    """Обработчик команды /status."""
     user_id = update.effective_user.id
     orders = db.get_user_orders(user_id)
     
     if not orders:
-        text = (
-            "🔍 *Ваши заказы*\n\n"
-            "У вас пока нет заказов.\n\n"
-            f"Создайте первый заказ или позвоните: {COMPANY_INFO['phone']}"
-        )
+        text = "🔍 У вас нет заявок.\n\nОформите первую заявку через /order"
     else:
-        text = "🔍 *Ваши заказы:*\n\n"
-        
+        from app.bot.handlers.orders import format_order_id
+        text = "🔍 *Ваши заявки:*\n\n"
         status_map = {
-            "new": "🆕 Новый",
-            "accepted": "✅ Принят",
+            "new": "🆕 Новая",
+            "accepted": "✅ Принята",
             "in_progress": "🔄 В работе",
-            "completed": "✔️ Завершен",
-            "cancelled": "❌ Отменен"
+            "completed": "✅ Выполнена",
+            "issued": "📤 Закрыта",
+            "cancelled": "❌ Отменена"
         }
-        
-        for order in orders[:10]:  # Показываем до 10 заказов
-            status = status_map.get(order['status'], order['status'])
-            service = order['service_type'] or "Услуга"
-            formatted_id = format_order_id(order['order_id'], order['created_at'])
-            text += f"*{formatted_id}* - {status}\n{service}\n\n"
+        for order in orders[:5]:
+            status = status_map.get(str(order['status']), str(order['status']))
+            desc = str(order['description']) if order['description'] else "Услуга"
+            formatted_id = format_order_id(int(order['order_id']), order['created_at'])
+            text += f"*{formatted_id}* - {status}\n{desc[:50]}...\n\n"
     
-    await update.message.reply_text(text, parse_mode="Markdown")
+    if update.message:
+        await update.message.reply_text(
+            text,
+            reply_markup=get_back_button(),
+            parse_mode="Markdown"
+        )
