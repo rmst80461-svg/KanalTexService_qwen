@@ -462,10 +462,23 @@ class TelegramBot:
         self.application = Application.builder().token(self.token).build()
         self.setup_handlers()
         
-        logger.info("🚀 Бот КаналТехСервис запущен")
-        logger.info("📍 Структура: ShveinyiHUB")
-        logger.info("🔧 Услуги: Ассенизаторские")
-        logger.info("📞 Телефон: +7 (910) 555-84-14")
-        logger.info("⏰ Режим: 24/7")
+        logger.info("Бот КаналТехСервис запущен")
+        logger.info("Структура: ShveinyiHUB")
+        logger.info("Услуги: Ассенизаторские")
+        logger.info("Телефон: +7 (910) 555-84-14")
+        logger.info("Режим: 24/7")
         
-        await self.application.run_polling()
+        async with self.application:
+            await self.application.start()
+            await self.application.updater.start_polling()
+            
+            # Keep running until interrupted
+            import asyncio
+            try:
+                while True:
+                    await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                pass
+            finally:
+                await self.application.updater.stop()
+                await self.application.stop()
