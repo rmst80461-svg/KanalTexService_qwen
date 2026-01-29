@@ -1,4 +1,4 @@
-"""Клавиатуры для Telegram бота."""
+"""Клавиатуры для Telegram бота КаналТехСервис."""
 from telegram import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton, KeyboardButton
 from typing import List
 
@@ -10,7 +10,7 @@ class Keyboards:
     def main_menu() -> ReplyKeyboardMarkup:
         """Главное меню."""
         keyboard = [
-            ["📋 Новый заказ", "📦 Мои заказы"],
+            ["📋 Новая заявка", "📦 Мои заявки"],
             ["💰 Прайс-лист", "❓ FAQ"],
             ["⭐ Оставить отзыв", "📞 Контакты"],
         ]
@@ -20,7 +20,7 @@ class Keyboards:
     def admin_menu() -> ReplyKeyboardMarkup:
         """Админ меню."""
         keyboard = [
-            ["📊 Статистика", "📋 Заказы"],
+            ["📊 Статистика", "📋 Заявки"],
             ["👥 Пользователи", "📢 Рассылка"],
             ["⚙️ Настройки", "🔙 Выход"],
         ]
@@ -28,21 +28,24 @@ class Keyboards:
 
     @staticmethod
     def order_categories() -> InlineKeyboardMarkup:
-        """Категории услуг для заказа."""
+        """Категории услуг для заявки."""
         keyboard = [
-            [InlineKeyboardButton("👗 Ремонт одежды", callback_data="cat_repair")],
-            [InlineKeyboardButton("✂️ Пошив", callback_data="cat_sewing")],
-            [InlineKeyboardButton("🎨 Декор и дизайн", callback_data="cat_design")],
-            [InlineKeyboardButton("🧵 Подгонка по фигуре", callback_data="cat_fitting")],
+            [InlineKeyboardButton("🚽 Выкачка септиков и ям", callback_data="cat_septic")],
+            [InlineKeyboardButton("🔧 Прочистка канализации", callback_data="cat_cleaning")],
+            [InlineKeyboardButton("🚨 Устранение засоров", callback_data="cat_blockage")],
+            [InlineKeyboardButton("🛠 Ремонт канализации", callback_data="cat_repair")],
+            [InlineKeyboardButton("📹 Видеодиагностика труб", callback_data="cat_video")],
+            [InlineKeyboardButton("🏗 Монтаж систем", callback_data="cat_install")],
             [InlineKeyboardButton("🔙 Отмена", callback_data="cancel")],
         ]
         return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
     def order_status_keyboard(order_id: int) -> InlineKeyboardMarkup:
-        """Клавиатура для управления статусом заказа."""
+        """Клавиатура для управления статусом заявки."""
         keyboard = [
             [InlineKeyboardButton("✅ Принять", callback_data=f"order_accept_{order_id}")],
+            [InlineKeyboardButton("🚗 Выехали", callback_data=f"order_dispatched_{order_id}")],
             [InlineKeyboardButton("🔧 В работе", callback_data=f"order_progress_{order_id}")],
             [InlineKeyboardButton("✔️ Завершен", callback_data=f"order_complete_{order_id}")],
             [InlineKeyboardButton("❌ Отменить", callback_data=f"order_cancel_{order_id}")],
@@ -72,6 +75,15 @@ class Keyboards:
     def contact_request() -> ReplyKeyboardMarkup:
         """Запрос контакта."""
         keyboard = [[KeyboardButton("📱 Отправить номер телефона", request_contact=True)]]
+        return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+
+    @staticmethod
+    def location_request() -> ReplyKeyboardMarkup:
+        """Запрос местоположения."""
+        keyboard = [
+            [KeyboardButton("📍 Отправить геолокацию", request_location=True)],
+            ["✏️ Ввести адрес вручную"]
+        ]
         return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
 
     @staticmethod
@@ -118,7 +130,8 @@ class Keyboards:
             [InlineKeyboardButton("📋 Общие вопросы", callback_data="faq_general")],
             [InlineKeyboardButton("💰 Цены и оплата", callback_data="faq_pricing")],
             [InlineKeyboardButton("⏱ Сроки выполнения", callback_data="faq_timing")],
-            [InlineKeyboardButton("📍 Доставка", callback_data="faq_delivery")],
+            [InlineKeyboardButton("🚗 Выезд и доставка", callback_data="faq_delivery")],
+            [InlineKeyboardButton("🔧 Виды работ", callback_data="faq_services")],
             [InlineKeyboardButton("🔙 Назад", callback_data="back_main")],
         ]
         return InlineKeyboardMarkup(keyboard)
@@ -134,19 +147,31 @@ class Keyboards:
 
     @staticmethod
     def my_orders_keyboard(orders: List[dict]) -> InlineKeyboardMarkup:
-        """Клавиатура со списком заказов пользователя."""
+        """Клавиатура со списком заявок пользователя."""
         keyboard = []
-        for order in orders[:10]:  # Показываем до 10 заказов
+        for order in orders[:10]:  # Показываем до 10 заявок
             status_emoji = {
                 'new': '🆕',
                 'accepted': '✅',
+                'dispatched': '🚗',
                 'in_progress': '🔧',
                 'completed': '✔️',
                 'cancelled': '❌'
             }.get(order['status'], '❓')
             
-            order_text = f"{status_emoji} Заказ #{order['order_id']:04d} - {order['service_type']}"
+            order_text = f"{status_emoji} Заявка #{order['order_id']:04d} - {order['service_type'][:25]}"
             keyboard.append([InlineKeyboardButton(order_text, callback_data=f"view_order_{order['order_id']}")])
         
         keyboard.append([InlineKeyboardButton("🔙 Главное меню", callback_data="back_main")])
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def urgency_keyboard() -> InlineKeyboardMarkup:
+        """Выбор срочности заявки."""
+        keyboard = [
+            [InlineKeyboardButton("🚨 Срочно (в течение часа)", callback_data="urgency_urgent")],
+            [InlineKeyboardButton("⏰ Сегодня", callback_data="urgency_today")],
+            [InlineKeyboardButton("📅 Завтра", callback_data="urgency_tomorrow")],
+            [InlineKeyboardButton("🗓 В другой день", callback_data="urgency_scheduled")],
+        ]
         return InlineKeyboardMarkup(keyboard)
