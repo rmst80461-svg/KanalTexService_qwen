@@ -115,11 +115,13 @@ class TelegramBot:
     async def handle_callback_query(self, update: Update, context):
         """Обработка всех callback запросов."""
         query = update.callback_query
-        await query.answer()
         data = query.data
         user_id = update.effective_user.id
-
+        
+        logger.info(f"Callback received: {data} from user {user_id}")
+        
         try:
+            await query.answer()
             # Главное меню
             if data == "back_menu":
                 await query.edit_message_text(
@@ -234,8 +236,11 @@ class TelegramBot:
                 await self.handle_admin_callbacks(query, context, data)
 
         except Exception as e:
-            logger.error(f"Ошибка обработки callback: {e}")
-            await query.answer("❌ Произошла ошибка", show_alert=True)
+            logger.error(f"Ошибка обработки callback {data}: {e}", exc_info=True)
+            try:
+                await query.answer("Произошла ошибка", show_alert=True)
+            except:
+                pass
 
     async def show_prices(self, query, category_data):
         """Показать цены по категориям услуг."""
