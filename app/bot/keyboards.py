@@ -1,13 +1,13 @@
-"""Клавиатуры для КаналТехСервис бота (по структуре ShveinyiHUB)."""
+"""Клавиатуры для КаналТехСервис бота (по структуре ShveinyiHUB).
+Кнопки, меню, услуги и цены для ассенизаторских и сантехнических услуг.
+"""
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
 
 def get_persistent_menu() -> ReplyKeyboardMarkup:
     """Одна кнопка меню внизу экрана."""
     keyboard = [[KeyboardButton("☰ Меню")]]
-    return ReplyKeyboardMarkup(keyboard,
-                               resize_keyboard=True,
-                               one_time_keyboard=False)
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
 
 def remove_keyboard() -> ReplyKeyboardRemove:
@@ -75,23 +75,12 @@ def get_faq_menu() -> InlineKeyboardMarkup:
 
 def get_back_button() -> InlineKeyboardMarkup:
     """Кнопка назад в меню."""
-    buttons = [[
-        InlineKeyboardButton("◀️  Главное меню               ", callback_data="back_menu")
-    ]]
-    return InlineKeyboardMarkup(buttons)
-
-
-def get_ai_response_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура для ответа AI."""
-    buttons = [
-        [InlineKeyboardButton("📝  Оформить заявку          ", callback_data="new_order")],
-        [InlineKeyboardButton("◀️  В меню                          ", callback_data="back_menu")]
-    ]
+    buttons = [[InlineKeyboardButton("◀️  Главное меню               ", callback_data="back_menu")]]
     return InlineKeyboardMarkup(buttons)
 
 
 def get_admin_main_menu() -> ReplyKeyboardMarkup:
-    """Главное меню админа (Reply Keyboard) с фильтрами."""
+    """Главное меню админа."""
     keyboard = [
         [KeyboardButton("📋 Новые заявки"), KeyboardButton("⏳ В работе")],
         [KeyboardButton("✅ Выполнены"), KeyboardButton("📊 Все заявки")],
@@ -102,18 +91,10 @@ def get_admin_main_menu() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
-def get_admin_inline_menu() -> InlineKeyboardMarkup:
-    """Инлайн меню админа."""
-    buttons = [
-        [InlineKeyboardButton("📦 Управление через веб", callback_data="open_web_admin")],
-    ]
-    return InlineKeyboardMarkup(buttons)
-
-
 def get_admin_orders_submenu() -> InlineKeyboardMarkup:
     """Подменю управления заявками."""
     buttons = [
-        [InlineKeyboardButton("🆕 Новые заявки", callback_data="admin_orders_new")],
+        [InlineKeyboardButton("🆕 Новые", callback_data="admin_orders_new")],
         [InlineKeyboardButton("🔄 В процессе", callback_data="admin_orders_in_progress")],
         [InlineKeyboardButton("✅ Завершенные", callback_data="admin_orders_completed")],
         [InlineKeyboardButton("❌ Отмененные", callback_data="admin_orders_cancelled")],
@@ -122,16 +103,8 @@ def get_admin_orders_submenu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(buttons)
 
 
-def get_admin_back_menu() -> InlineKeyboardMarkup:
-    """Кнопка назад в админ-панель."""
-    buttons = [[
-        InlineKeyboardButton("◀️ В админ-панель", callback_data="admin_back_menu")
-    ]]
-    return InlineKeyboardMarkup(buttons)
-
-
 def get_admin_order_detail_keyboard(order_id: int, order_status: str) -> InlineKeyboardMarkup:
-    """Клавиатура для детального просмотра заявки."""
+    """Клавиатура для деталей заявки."""
     buttons = []
 
     if order_status == 'new':
@@ -164,37 +137,6 @@ def get_admin_order_detail_keyboard(order_id: int, order_status: str) -> InlineK
         'cancelled': 'admin_orders_cancelled'
     }.get(order_status, 'admin_back_menu')
 
-    buttons.append(
-        [InlineKeyboardButton("◀️ Назад к списку", callback_data=back_data)]
-    )
+    buttons.append([InlineKeyboardButton("◀️ Назад к списку", callback_data=back_data)])
 
-    return InlineKeyboardMarkup(buttons)
-
-
-def get_admin_orders_menu() -> InlineKeyboardMarkup:
-    """Меню управления заявками."""
-    return get_admin_orders_submenu()
-
-
-def get_contact_keyboard() -> ReplyKeyboardMarkup:
-    """Клавиатура для отправки контакта."""
-    keyboard = [[KeyboardButton("📱 Отправить номер телефона", request_contact=True)]]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-
-
-def get_location_keyboard() -> ReplyKeyboardMarkup:
-    """Клавиатура для отправки местоположения."""
-    keyboard = [
-        [KeyboardButton("📍 Отправить местоположение", request_location=True)],
-        [KeyboardButton("✏️ Ввести адрес вручную")]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-
-
-def get_confirmation_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура подтверждения."""
-    buttons = [
-        [InlineKeyboardButton("✅ Подтвердить", callback_data="confirm_yes")],
-        [InlineKeyboardButton("❌ Отменить", callback_data="confirm_no")]
-    ]
     return InlineKeyboardMarkup(buttons)
