@@ -123,6 +123,39 @@ class TelegramBot:
             reply_markup=get_main_menu()
         )
 
+    def get_order_action_keyboard(self, order_id: int, status: str):
+        """Клавиатура действий с заявкой."""
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        
+        buttons = []
+        if status == 'new':
+            buttons.append([
+                InlineKeyboardButton("🔄 В работу", callback_data=f"set_status_{order_id}_in_progress"),
+                InlineKeyboardButton("❌ Отменить", callback_data=f"set_status_{order_id}_cancelled")
+            ])
+            buttons.append([
+                InlineKeyboardButton("📤 Переслать исполнителю", callback_data=f"forward_order_{order_id}")
+            ])
+        elif status == 'in_progress':
+            buttons.append([
+                InlineKeyboardButton("✅ Выполнено", callback_data=f"set_status_{order_id}_completed"),
+                InlineKeyboardButton("❌ Отменить", callback_data=f"set_status_{order_id}_cancelled")
+            ])
+        elif status == 'completed':
+            buttons.append([
+                InlineKeyboardButton("🔄 Вернуть в работу", callback_data=f"set_status_{order_id}_in_progress")
+            ])
+        elif status == 'cancelled':
+            buttons.append([
+                InlineKeyboardButton("🔄 Восстановить", callback_data=f"set_status_{order_id}_new")
+            ])
+        
+        buttons.append([
+            InlineKeyboardButton("📞 Позвонить клиенту", callback_data=f"call_client_{order_id}")
+        ])
+        
+        return InlineKeyboardMarkup(buttons)
+
     async def handle_admin_text_buttons(self, update: Update, context):
         """Обработка текстовых кнопок админ-меню."""
         text = update.message.text
@@ -144,19 +177,28 @@ class TelegramBot:
             orders = self.db.get_all_orders() if status == "all" else self.db.get_orders_by_status(status)
             
             if orders:
-                response = f"📋 <b>{text}:</b>\n\n"
+                await update.message.reply_text(f"📋 <b>{text}:</b>", parse_mode=ParseMode.HTML)
                 for order in orders[:10]:
                     order_id = order.get('order_id', '?')
                     service = order.get('service_type', 'Не указана')
                     address = order.get('address', 'Не указан')
                     phone = order.get('phone', 'Не указан')
+                    comment = order.get('comment', '')
                     order_status = order.get('status', 'new')
                     status_emoji = {'new': '🆕', 'in_progress': '🔄', 'completed': '✅', 'cancelled': '❌'}.get(order_status, '❓')
-                    response += f"{status_emoji} <b>#{order_id}</b> | {service}\n📍 {address}\n📞 {phone}\n\n"
+                    
+                    order_text = (
+                        f"{status_emoji} <b>Заявка #{order_id}</b>\n\n"
+                        f"📋 Услуга: {service}\n"
+                        f"📍 Адрес: {address}\n"
+                        f"📞 Телефон: {phone}\n"
+                        f"💬 Комментарий: {comment if comment else '—'}"
+                    )
+                    
+                    keyboard = self.get_order_action_keyboard(order_id, order_status)
+                    await update.message.reply_text(order_text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
             else:
-                response = f"📋 <b>{text}:</b>\n\n<i>Заявок нет</i>"
-            
-            await update.message.reply_text(response, parse_mode=ParseMode.HTML)
+                await update.message.reply_text(f"📋 <b>{text}:</b>\n\n<i>Заявок нет</i>", parse_mode=ParseMode.HTML)
         
         elif text == "📈 Статистика":
             stats = self.db.get_stats()
@@ -203,6 +245,50 @@ class TelegramBot:
         step = context.user_data.get('step')
         
         logger.info(f"Text input from {user_id}: '{text}', step: {step}")
+        
+        # Обработка ввода ID исполнителя
+        if step == 'enter_executor_id':
+            try:
+                executor_id = int(text)
+                order_id = context.user_data.get('forward_order_id')
+                order = self.db.get_order_by_id(order_id)
+                
+                if order:
+                    order_text = (
+                        f"📋 <b>Новая заявка #{order_id}</b>\n\n"
+                        f"🔧 Услуга: {order.get('service_type', 'Не указана')}\n"
+                        f"📍 Адрес: {order.get('address', 'Не указан')}\n"
+                        f"📞 Телефон: {order.get('phone', 'Не указан')}\n"
+                        f"💬 Комментарий: {order.get('comment', '') or '—'}\n\n"
+                        f"Нажмите кнопку, когда возьмёте в работу:"
+                    )
+                    
+                    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                    keyboard = InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔄 Взять в работу", callback_data=f"executor_take_{order_id}")]
+                    ])
+                    
+                    await self.application.bot.send_message(
+                        chat_id=executor_id,
+                        text=order_text,
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=keyboard
+                    )
+                    
+                    await update.message.reply_text(
+                        f"✅ Заявка #{order_id} переслана исполнителю!",
+                        parse_mode=ParseMode.HTML
+                    )
+                
+                context.user_data.clear()
+                return
+            except ValueError:
+                await update.message.reply_text("❌ Неверный ID. Введите число.")
+                return
+            except Exception as e:
+                await update.message.reply_text(f"❌ Ошибка: не удалось переслать. Проверьте ID исполнителя.")
+                context.user_data.clear()
+                return
         
         if step == 'enter_address':
             context.user_data['address'] = text
@@ -391,6 +477,51 @@ class TelegramBot:
             # FAQ ответы
             elif data.startswith("faq_"):
                 await self.show_faq_answer(query, data)
+
+            # Смена статуса заявки
+            elif data.startswith("set_status_"):
+                await self.handle_set_status(query, data)
+            
+            # Переслать исполнителю
+            elif data.startswith("forward_order_"):
+                order_id = int(data.replace("forward_order_", ""))
+                context.user_data['forward_order_id'] = order_id
+                context.user_data['step'] = 'enter_executor_id'
+                await query.message.reply_text(
+                    "📤 <b>Пересылка заявки исполнителю</b>\n\n"
+                    "Введите Telegram ID исполнителя или перешлите сообщение от него:",
+                    parse_mode=ParseMode.HTML
+                )
+            
+            # Показать телефон клиента
+            elif data.startswith("call_client_"):
+                order_id = int(data.replace("call_client_", ""))
+                order = self.db.get_order_by_id(order_id)
+                if order:
+                    phone = order.get('phone', 'Не указан')
+                    await query.answer(f"📞 Телефон: {phone}", show_alert=True)
+                else:
+                    await query.answer("❌ Заявка не найдена", show_alert=True)
+            
+            # Исполнитель берёт заявку
+            elif data.startswith("executor_take_"):
+                order_id = int(data.replace("executor_take_", ""))
+                self.db.update_order_status(order_id, 'in_progress')
+                await query.edit_message_text(
+                    f"✅ <b>Заявка #{order_id} взята в работу!</b>\n\n"
+                    f"Когда выполните — сообщите администратору.",
+                    parse_mode=ParseMode.HTML
+                )
+                
+                for admin_id in self.admin_ids:
+                    try:
+                        await self.application.bot.send_message(
+                            chat_id=admin_id,
+                            text=f"🔄 Заявка #{order_id} взята исполнителем в работу",
+                            parse_mode=ParseMode.HTML
+                        )
+                    except:
+                        pass
 
             # Админ callbacks
             elif data.startswith("admin_") or data.startswith("status_"):
@@ -617,6 +748,44 @@ class TelegramBot:
             parse_mode=ParseMode.HTML,
             reply_markup=get_back_button()
         )
+
+    async def handle_set_status(self, query, data):
+        """Изменить статус заявки."""
+        user_id = query.from_user.id
+        if user_id not in self.admin_ids:
+            await query.answer("❌ Доступ запрещен", show_alert=True)
+            return
+        
+        parts = data.replace("set_status_", "").split("_", 1)
+        order_id = int(parts[0])
+        new_status = parts[1]
+        
+        self.db.update_order_status(order_id, new_status)
+        
+        status_names = {
+            'new': '🆕 Новая',
+            'in_progress': '🔄 В работе',
+            'completed': '✅ Выполнена',
+            'cancelled': '❌ Отменена'
+        }
+        
+        order = self.db.get_order_by_id(order_id)
+        if order:
+            keyboard = self.get_order_action_keyboard(order_id, new_status)
+            order_text = (
+                f"{status_names.get(new_status, new_status)} <b>Заявка #{order_id}</b>\n\n"
+                f"📋 Услуга: {order.get('service_type', 'Не указана')}\n"
+                f"📍 Адрес: {order.get('address', 'Не указан')}\n"
+                f"📞 Телефон: {order.get('phone', 'Не указан')}\n"
+                f"💬 Комментарий: {order.get('comment', '') or '—'}"
+            )
+            await query.edit_message_text(order_text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+            
+            client_id = order.get('user_id')
+            if client_id:
+                await self.send_notification(client_id, order_id, new_status)
+        
+        await query.answer(f"✅ Статус изменён: {status_names.get(new_status, new_status)}")
 
     async def handle_admin_callbacks(self, query, context, data):
         """Обработка админ-функций."""

@@ -169,3 +169,12 @@ class Database:
         count = cursor.fetchone()['cnt']
         conn.close()
         return count
+    
+    def get_order_by_id(self, order_id: int) -> Optional[Dict]:
+        """Get order by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM orders WHERE order_id = ?', (order_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
