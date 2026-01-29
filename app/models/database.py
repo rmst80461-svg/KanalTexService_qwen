@@ -44,12 +44,19 @@ class Database:
                 service_type TEXT,
                 address TEXT,
                 phone TEXT,
+                comment TEXT DEFAULT '',
                 status TEXT DEFAULT 'new',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             )
         ''')
+        
+        # Add comment column if not exists (migration)
+        try:
+            cursor.execute('ALTER TABLE orders ADD COLUMN comment TEXT DEFAULT ""')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
         
         # Reviews table
         cursor.execute('''
@@ -93,15 +100,15 @@ class Database:
         conn.close()
         return orders
     
-    def create_order(self, user_id: int, service_type: str, address: str, phone: str) -> int:
+    def create_order(self, user_id: int, service_type: str, address: str, phone: str, comment: str = '') -> int:
         """Create new order"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
-            INSERT INTO orders (user_id, service_type, address, phone, status)
-            VALUES (?, ?, ?, ?, 'new')
-        ''', (user_id, service_type, address, phone))
+            INSERT INTO orders (user_id, service_type, address, phone, comment, status)
+            VALUES (?, ?, ?, ?, ?, 'new')
+        ''', (user_id, service_type, address, phone, comment))
         
         conn.commit()
         order_id = cursor.lastrowid
