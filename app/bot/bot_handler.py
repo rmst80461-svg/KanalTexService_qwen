@@ -475,7 +475,9 @@ class TelegramBot:
         
         async with self.application:
             await self.application.start()
-            await self.application.updater.start_polling()
+            await self.application.updater.start_polling(
+                allowed_updates=["message", "callback_query", "edited_message"]
+            )
             
             # Keep running until interrupted
             import asyncio
