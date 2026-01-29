@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # States для ConversationHandler
-SELECT_CATEGORY, ENTER_DESCRIPTION, UPLOAD_PHOTO, ENTER_ADDRESS, CONFIRM_ORDER = range(5)
+SELECT_CATEGORY, ENTER_DESCRIPTION, SELECT_VOLUME, SELECT_URGENCY, ENTER_ADDRESS, CONFIRM_ORDER = range(6)
 
 
 class OrderHandler:
@@ -20,7 +20,7 @@ class OrderHandler:
     async def start_order(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Начало создания заказа."""
         await update.message.reply_text(
-            "📋 Создание нового заказа\n\nВыберите необходимую услугу:",
+            "📋 Создание нового заказа\n\nВыберите тип услуги:",
             reply_markup=self.kb.order_categories()
         )
         return SELECT_CATEGORY
@@ -35,38 +35,19 @@ class OrderHandler:
             return ConversationHandler.END
 
         category_map = {
-            "cat_septic": "Откачка септиков",
-            "cat_cleaning": "Прочистка канализации",
-            "cat_blockage": "Устранение засоров",
-            "cat_installation": "Монтаж септиков",
-            "cat_diagnostics": "Диагностика системы"
+            "cat_septik": "Откачка септиков",
+            "cat_vygrebnaya": "Очистка выгребных ям",
+            "cat_kanalizaciya": "Прочистка канализации",
+            "cat_promyvka": "Промывка труб высоким давлением",
+            "cat_video": "Видеодиагностика труб",
+            "cat_vyvoz": "Вывоз жидких отходов"
         }
 
         context.user_data['order_category'] = category_map.get(query.data, "Другое")
         
         await query.edit_message_text(
             f"✅ Выбрана услуга: {context.user_data['order_category']}\n\n"
-            "📍 Укажите адрес объекта:",
-            reply_markup=self.kb.cancel_keyboard()
-        )
-        return ENTER_ADDRESS
-
-    async def enter_address(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Ввод адреса объекта."""
-        if update.message.text == "❌ Отменить":
-            await update.message.reply_text(
-                "❌ Создание заказа отменено.",
-                reply_markup=self.kb.main_menu()
-            )
-            return ConversationHandler.END
-
-        context.user_data['order_address'] = update.message.text
-        
-        await update.message.reply_text(
-            "📝 Опишите детали заказа:\n"
-            "- Объем септика (если применимо)\n"
-            "- Степень засора\n"
-            "- Дополнительные пожелания",
+            "📝 Опишите проблему или укажите дополнительные детали:",
             reply_markup=self.kb.cancel_keyboard()
         )
         return ENTER_DESCRIPTION
@@ -82,41 +63,96 @@ class OrderHandler:
 
         context.user_data['order_description'] = update.message.text
         
-        await update.message.reply_text(
-            "📸 Можете отправить фото проблемы (или нажмите 'Пропустить'):",
-            reply_markup=self.kb.skip_keyboard()
+        # Для откачки и вывоза спрашиваем объем
+        category = context.user_data.get('order_category', '')
+        if 'Откачка' in category or 'Вывоз' in category or 'выгребн' in category:
+            await update.message.reply_text(
+                "📏 Укажите примерный объем работ:",
+                reply_markup=self.kb.volume_selection()
+            )
+            return SELECT_VOLUME
+        else:
+            return await self.ask_urgency(update, context)
+
+    async def select_volume(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Выбор объема."""
+        query = update.callback_query
+        await query.answer()
+
+        volume_map = {
+            "vol_5": "До 5 м³",
+            "vol_10": "5-10 м³",
+            "vol_15": "10-15 м³",
+            "vol_more": "Более 15 м³"
+        }
+
+        context.user_data['order_volume'] = volume_map.get(query.data, "Не указано")
+        return await self.ask_urgency(update, context)
+
+    async def ask_urgency(self, update, context):
+        """Запрос срочности."""
+        text = "⏰ Когда необходимо выполнить работы?"
+        
+        if hasattr(update, 'callback_query') and update.callback_query:
+            await update.callback_query.edit_message_text(
+                text,
+                reply_markup=self.kb.urgency_keyboard()
+            )
+        else:
+            await update.message.reply_text(
+                text,
+                reply_markup=self.kb.urgency_keyboard()
+            )
+        return SELECT_URGENCY
+
+    async def select_urgency(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Выбор срочности."""
+        query = update.callback_query
+        await query.answer()
+
+        urgency_map = {
+            "urgent_today": "Срочно (сегодня)",
+            "urgent_tomorrow": "Завтра",
+            "urgent_week": "В течение недели"
+        }
+
+        context.user_data['order_urgency'] = urgency_map.get(query.data, "Не указано")
+        
+        await query.edit_message_text(
+            "📍 Укажите адрес объекта:\n\n"
+            "Например: г. Москва, ул. Ленина, д. 10"
         )
-        return UPLOAD_PHOTO
+        return ENTER_ADDRESS
 
-    async def upload_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Загрузка фото к заказу."""
-        if update.callback_query and update.callback_query.data == "skip":
-            await update.callback_query.answer()
-            context.user_data['order_photo'] = None
-            return await self.confirm_order(update, context)
-
-        if update.message.photo:
-            context.user_data['order_photo'] = update.message.photo[-1].file_id
-            
+    async def enter_address(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Ввод адреса."""
+        context.user_data['order_address'] = update.message.text
         return await self.confirm_order(update, context)
 
     async def confirm_order(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Подтверждение заказа."""
         category = context.user_data.get('order_category', 'Не указано')
-        address = context.user_data.get('order_address', 'Не указано')
         description = context.user_data.get('order_description', 'Не указано')
-        has_photo = "Да" if context.user_data.get('order_photo') else "Нет"
+        volume = context.user_data.get('order_volume', '')
+        urgency = context.user_data.get('order_urgency', 'Не указано')
+        address = context.user_data.get('order_address', 'Не указано')
 
         text = (
             "📋 Проверьте данные заказа:\n\n"
-            f"🚰 Услуга: {category}\n"
-            f"📍 Адрес: {address}\n"
+            f"🔧 Услуга: {category}\n"
             f"📝 Описание: {description}\n"
-            f"📸 Фото: {has_photo}\n\n"
+        )
+        
+        if volume:
+            text += f"📏 Объем: {volume}\n"
+        
+        text += (
+            f"⏰ Срочность: {urgency}\n"
+            f"📍 Адрес: {address}\n\n"
             "Подтвердить создание заказа?"
         )
 
-        if update.callback_query:
+        if hasattr(update, 'callback_query') and update.callback_query:
             await update.callback_query.edit_message_text(text, reply_markup=self.kb.confirm_keyboard())
         else:
             await update.message.reply_text(text, reply_markup=self.kb.confirm_keyboard())
@@ -139,27 +175,29 @@ class OrderHandler:
         # Создаем заказ в БД
         user_id = update.effective_user.id
         category = context.user_data.get('order_category')
+        description = context.user_data.get('order_description')
+        volume = context.user_data.get('order_volume', '')
+        urgency = context.user_data.get('order_urgency')
         address = context.user_data.get('order_address')
-        description = f"Адрес: {address}\n{context.user_data.get('order_description', '')}"
-        photo = context.user_data.get('order_photo')
+
+        full_description = f"{description}\n\nОбъем: {volume}\nСрочность: {urgency}\nАдрес: {address}"
 
         order_id = self.db.create_order(
             user_id=user_id,
             service_type=category,
             category=category,
-            description=description,
-            photo_path=photo
+            description=full_description
         )
 
         await query.edit_message_text(
             f"✅ Заказ #{order_id:04d} успешно создан!\n\n"
-            "📞 Наш диспетчер свяжется с вами в ближайшее время для уточнения деталей и назначения времени выезда.\n\n"
-            "Вы можете отслеживать статус в разделе '📦 Мои заказы'.",
+            "Наш диспетчер свяжется с вами в ближайшее время для уточнения деталей.\n"
+            "Вы можете отслеживать статус в разделе 'Мои заказы'.",
             reply_markup=None
         )
 
         # Уведомляем админов
-        await self.notify_admins_new_order(context, order_id, user_id, category, description)
+        await self.notify_admins_new_order(context, order_id, user_id, category, full_description)
 
         context.user_data.clear()
         return ConversationHandler.END
@@ -172,8 +210,8 @@ class OrderHandler:
         text = (
             f"🆕 Новый заказ #{order_id:04d}\n\n"
             f"👤 Пользователь: {user_id}\n"
-            f"🚰 Услуга: {category}\n"
-            f"📝 Описание: {description}"
+            f"🔧 Услуга: {category}\n"
+            f"📋 Детали:\n{description}"
         )
 
         for admin_id in admin_ids:
@@ -218,7 +256,7 @@ class OrderHandler:
         status_text = {
             'new': '🆕 Новый',
             'accepted': '✅ Принят',
-            'in_progress': '🔧 Выполняется',
+            'in_progress': '🚗 Выехали на объект',
             'completed': '✔️ Завершен',
             'cancelled': '❌ Отменен'
         }.get(order['status'], '❓ Неизвестно')
@@ -227,15 +265,15 @@ class OrderHandler:
             f"📋 Заказ #{order['order_id']:04d}\n\n"
             f"Статус: {status_text}\n"
             f"Услуга: {order['category']}\n"
-            f"Описание: {order['description']}\n"
+            f"Детали: {order['description']}\n"
             f"Создан: {order['created_at']}\n"
         )
 
         if order.get('price'):
-            text += f"💰 Стоимость: {order['price']} руб.\n"
+            text += f"\n💰 Стоимость: {order['price']} руб."
 
         if order.get('admin_notes'):
-            text += f"\n💬 Комментарий мастера: {order['admin_notes']}"
+            text += f"\n\n💬 Комментарий диспетчера: {order['admin_notes']}"
 
         await query.edit_message_text(text)
 
