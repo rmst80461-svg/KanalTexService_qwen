@@ -32,10 +32,7 @@ def get_prices_menu() -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton("🚚  Откачка септика          ", callback_data="price_septic")],
         [InlineKeyboardButton("🚽  Прочистка канализации", callback_data="price_cleaning")],
-        [InlineKeyboardButton("🔧  Сантехнические работы", callback_data="price_plumbing")],
-        [InlineKeyboardButton("💧  Установка септика       ", callback_data="price_installation")],
         [InlineKeyboardButton("🔍  Диагностика труб          ", callback_data="price_diagnostics")],
-        [InlineKeyboardButton("🛠  Ремонт канализации     ", callback_data="price_repair")],
         [InlineKeyboardButton("◀️  Назад в меню              ", callback_data="back_menu")],
     ]
     return InlineKeyboardMarkup(buttons)
@@ -46,10 +43,7 @@ def get_services_menu() -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton("🚚  Откачка септика          ", callback_data="service_septic")],
         [InlineKeyboardButton("🚽  Прочистка канализации", callback_data="service_cleaning")],
-        [InlineKeyboardButton("🔧  Вызов сантехника         ", callback_data="service_plumber")],
-        [InlineKeyboardButton("💧  Установка септика       ", callback_data="service_installation")],
         [InlineKeyboardButton("🔍  Видеодиагностика        ", callback_data="service_video")],
-        [InlineKeyboardButton("🛠  Ремонт труб                  ", callback_data="service_pipe_repair")],
         [InlineKeyboardButton("🧹  Промывка канализации ", callback_data="service_flushing")],
         [InlineKeyboardButton("❓  Другое                           ", callback_data="service_other")],
         [InlineKeyboardButton("◀️  Назад в меню              ", callback_data="back_menu")],
