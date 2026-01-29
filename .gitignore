@@ -1,43 +1,79 @@
-```
-# Environment variables
+# Directories
+KanalTexService_qwen/
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
 .env
 .env.local
 *.env.*
 
-# Dependencies
-venv/
-.venv/
-__pycache__/
-*.pyc
-*$py.class
+# Bot Token - SECURITY CRITICAL
+# Never commit this file to version control!
+bot_token.txt
 
-# Logs
-*.log
-
-# Editor/IDE
+# Editors
 .vscode/
 .idea/
-*.swp
-*.swo
-*.tmp
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Coverage
-.coverage
-htmlcov/
-coverage/
-
-# Distribution
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
 dist/
 build/
-*.egg-info/
+target/
+.gradle/
 
-# Python
-*.py[cod]
-*$py.class
+# OS generated files
+.DS_Store
+Thumbz.db
+
+# Compiled files
+*.pyc
+*.class
+*.o
+*.exe
+*.dll
 *.so
-.Python
-```
+*.a
+*.obj
+*.out
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+
+# Database
+*.db
+requests.db
+
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
