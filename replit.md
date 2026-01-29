@@ -30,6 +30,7 @@ The application runs on port 5000 and serves:
 - `BOT_TOKEN` - Telegram bot token from @BotFather (required for bot functionality)
 - `ADMIN_IDS` - Comma-separated Telegram user IDs for admin access
 - `FLASK_SECRET_KEY` - Secret key for Flask sessions
+- `ADMIN_PASSWORD` - Password for web admin panel (default: admin123)
 
 ## Optional Environment Variables
 - `COMPANY_NAME` - Company name (default: КаналТехСервис)
@@ -50,7 +51,15 @@ For production deployment, use gunicorn:
 gunicorn --bind 0.0.0.0:5000 --reuse-port "app.web.routes:create_app(None, None)"
 ```
 
-## Admin Panel Features
+## Web Admin Panel Features
+- Session-based password authentication with login/logout
+- Stats dashboard with order counts by status
+- Table of orders with filtering by status
+- Change order status (В работу, Отменить)
+- Delete orders via API
+- Responsive modern design
+
+## Telegram Admin Panel Features
 - View orders by status (new, in progress, completed, cancelled)
 - Change order status with inline buttons
 - Forward orders to executors by Telegram ID
@@ -65,8 +74,11 @@ gunicorn --bind 0.0.0.0:5000 --reuse-port "app.web.routes:create_app(None, None)
 - Order confirmation with address, phone, optional comment
 - Status notifications to customers
 
-## Recent Changes
-- Added full admin panel with order management
+## Recent Changes (Jan 2026)
+- Added web admin panel with password authentication
+- Login page at /login, logout at /logout
+- API routes with authorization: /api/orders, /api/orders/:id/status, /api/orders/:id
+- Added full Telegram admin panel with order management
 - Broadcast messaging to all users
 - Order deletion functionality
 - Client order history viewing
