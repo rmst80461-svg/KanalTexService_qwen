@@ -3,11 +3,15 @@ from flask import Flask, render_template, jsonify, request, session, redirect, u
 from functools import wraps
 from typing import Optional, TYPE_CHECKING
 import os
+import logging
 
 if TYPE_CHECKING:
     from app.models.database import Database
+    from app.bot.bot_handler import TelegramBot
 
-def create_app(db: 'Database', bot=None) -> Flask:
+logger = logging.getLogger(__name__)
+
+def create_app(db: 'Database', bot: Optional['TelegramBot'] = None) -> Flask:
     """Create Flask application"""
     app = Flask(__name__, template_folder='../../templates')
     app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'dev-key-change-in-production')
@@ -102,6 +106,27 @@ def create_app(db: 'Database', bot=None) -> Flask:
             return jsonify({"error": "Invalid status"}), 400
         
         db.update_order_status(order_id, new_status)
+        
+        # Отправляем уведомление клиенту в Telegram, если есть бот и user_id
+        if bot and order.get('user_id'):
+            try:
+                import asyncio
+                # Запускаем асинхронную задачу в event loop бота
+                if bot.loop and bot.loop.is_running():
+                    asyncio.run_coroutine_threadsafe(
+                        bot.send_status_notification(
+                            user_id=order['user_id'],
+                            order_id=order_id,
+                            new_status=new_status
+                        ),
+                        bot.loop
+                    )
+                    logger.info(f"Уведомление отправлено клиенту {order['user_id']} о заявке {order_id}")
+                else:
+                    logger.warning("Event loop бота не запущен, уведомление не отправлено")
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомления: {e}")
+        
         return jsonify({"success": True})
     
     @app.route('/api/orders/<int:order_id>', methods=['DELETE'])
