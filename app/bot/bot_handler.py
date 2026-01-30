@@ -3,6 +3,8 @@
 """
 import logging
 import os
+import asyncio
+from datetime import datetime
 from telegram import Update, InputFile
 from telegram.ext import (
     Application,
@@ -47,6 +49,7 @@ class TelegramBot:
         self.db = db
         self.admin_ids = ADMIN_IDS if ADMIN_IDS else []
         self.application = None
+        self.loop = None
         self.logo_path = "assets/logo.jpg"
         
         # Словарь для преобразования ключей услуг в русские названия
@@ -200,7 +203,7 @@ class TelegramBot:
                 for order in orders[:10]:
                     order_id = order.get('order_id', '?')
                     service_key = order.get('service_type', 'Не указана')
-                    service_name = self.service_names.get(service_key, service_key)  # Преобразуем в русское название
+                    service_name = self.service_names.get(service_key, service_key)
                     address = order.get('address', 'Не указан')
                     phone = order.get('phone', 'Не указан')
                     comment = order.get('comment', '')
@@ -317,7 +320,7 @@ class TelegramBot:
                 
                 if order:
                     service_key = order.get('service_type', 'Не указана')
-                    service_name = self.service_names.get(service_key, service_key)  # Преобразуем в русское название
+                    service_name = self.service_names.get(service_key, service_key)
                     
                     order_text = (
                         f"📋 <b>Новая заявка #{order_id}</b>\n\n"
@@ -477,7 +480,7 @@ class TelegramBot:
             # Обработка услуг для заказа
             elif data.startswith("service_"):
                 service = data.replace("service_", "")
-                service_names = self.service_names  # Используем общий словарь
+                service_names = self.service_names
                 
                 if service == "other":
                     context.user_data['step'] = 'ai_chat'
@@ -910,7 +913,7 @@ class TelegramBot:
         if order:
             keyboard = self.get_order_action_keyboard(order_id, new_status)
             service_key = order.get('service_type', 'Не указана')
-            service_name = self.service_names.get(service_key, service_key)  # Преобразуем в русское название
+            service_name = self.service_names.get(service_key, service_key)
             
             order_text = (
                 f"{status_names.get(new_status, new_status)} <b>Заявка #{order_id}</b>\n\n"
@@ -982,12 +985,36 @@ class TelegramBot:
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления: {e}")
 
+    async def send_status_notification(self, user_id: int, order_id: int, new_status: str):
+        """Отправить уведомление клиенту об изменении статуса (для вызова из routes.py)"""
+        try:
+            status_texts = {
+                'new': '🆕 Ваша заявка создана',
+                'in_progress': '🔄 Ваша заявка взята в работу',
+                'completed': '✅ Ваша заявка выполнена',
+                'cancelled': '❌ Ваша заявка отменена'
+            }
+            
+            text = f"{status_texts.get(new_status, '📌 Обновление статуса')}\n\n"
+            text += f"📋 Номер заявки: #{order_id}\n"
+            text += f"📞 Контакты: +7 (904) 363-36-36\n\n"
+            text += "Спасибо, что выбрали <b>КаналТехСервис</b>! 😊"
+
+            if self.application:
+                await self.application.bot.send_message(
+                    chat_id=user_id,
+                    text=text,
+                    parse_mode=ParseMode.HTML
+                )
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления: {e}")
+
     async def notify_admins_new_order(self, order_id, service_name, address, phone, comment):
         """Уведомление админов о новой заявке."""
         try:
             text = (
                 f"🆕 <b>Новая заявка #{order_id}</b>\n\n"
-                f"📋 Услуга: {service_name}\n"  # service_name уже на русском из context.user_data
+                f"📋 Услуга: {service_name}\n"
                 f"📍 Адрес: {address}\n"
                 f"📞 Телефон: {phone}\n"
                 f"💬 Комментарий: {comment if comment else 'нет'}"
@@ -1041,6 +1068,9 @@ class TelegramBot:
         self.application = Application.builder().token(self.token).build()
         self.setup_handlers()
         
+        # Сохраняем event loop для использования из других потоков
+        self.loop = asyncio.get_event_loop()
+        
         logger.info("Бот КаналТехСервис запущен")
         logger.info("Структура: ShveinyiHUB")
         logger.info("Услуги: Ассенизаторские")
@@ -1054,7 +1084,6 @@ class TelegramBot:
             )
             
             # Keep running until interrupted
-            import asyncio
             try:
                 while True:
                     await asyncio.sleep(1)
