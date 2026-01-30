@@ -146,10 +146,47 @@
             margin-bottom: 20px;
             opacity: 0.5;
         }
+        /* Модальное окно */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background: white;
+            margin: 5% auto;
+            padding: 25px;
+            width: 90%;
+            max-width: 600px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .modal-content p {
+            margin: 10px 0;
+        }
+        .modal-content strong {
+            color: #333;
+        }
+        .modal-content .close {
+            float: right;
+            font-size: 28px;
+            cursor: pointer;
+            color: #888;
+        }
         @media (max-width: 768px) {
             .container { padding: 10px; }
             th, td { padding: 10px; font-size: 14px; }
             .action-btn { padding: 5px 8px; font-size: 11px; }
+            .modal-content {
+                margin: 10% auto;
+                width: 95%;
+                padding: 15px;
+            }
         }
     </style>
 </head>
@@ -210,6 +247,36 @@
             <div class="empty-state" id="empty-state" style="display:none;">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg>
                 <p>Заявок нет</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для деталей заявки -->
+    <div id="orderModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 style="margin-bottom:20px; color:#333;">Заявка #<span id="modalOrderId"></span></h2>
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
+                <div>
+                    <p><strong>Услуга:</strong><br><span id="modalServiceType" style="color:#555;"></span></p>
+                    <p><strong>Адрес:</strong><br><span id="modalAddress" style="color:#555;"></span></p>
+                    <p><strong>Телефон:</strong><br><span id="modalPhone" style="color:#555;"></span></p>
+                </div>
+                <div>
+                    <p><strong>Статус:</strong><br><span id="modalStatus" style="display:inline-block; padding:5px 12px; border-radius:20px;"></span></p>
+                    <p><strong>Дата создания:</strong><br><span id="modalCreatedAt" style="color:#555;"></span></p>
+                    <p><strong>Дата обновления:</strong><br><span id="modalUpdatedAt" style="color:#555;"></span></p>
+                </div>
+            </div>
+            
+            <div style="margin-top:20px; padding-top:20px; border-top:1px solid #eee;">
+                <p><strong>Комментарий:</strong></p>
+                <div id="modalComment" style="background:#f9f9f9; padding:15px; border-radius:8px; color:#555;"></div>
+            </div>
+            
+            <div style="margin-top:25px; text-align:right;">
+                <button onclick="closeModal()" style="padding:10px 20px; background:#f5f5f5; border:none; border-radius:6px; cursor:pointer; margin-right:10px;">Закрыть</button>
             </div>
         </div>
     </div>
@@ -286,14 +353,14 @@
                 }
                 
                 return `
-                    <tr>
+                    <tr onclick="showOrderDetails(${order.order_id})" style="cursor:pointer;">
                         <td><strong>${order.order_id}</strong></td>
                         <td>${order.service_type || '—'}</td>
                         <td>${order.address || '—'}</td>
                         <td>${order.phone || '—'}</td>
                         <td><span class="status-badge status-${order.status}">${statusLabels[order.status] || order.status}</span></td>
                         <td>${date}</td>
-                        <td>${actions}</td>
+                        <td onclick="event.stopPropagation();">${actions}</td>
                     </tr>
                 `;
             }).join('');
@@ -329,7 +396,72 @@
             }
         }
 
-        loadOrders();
+        // Функция для открытия модального окна с деталями заявки
+        function showOrderDetails(orderId) {
+            const order = allOrders.find(o => o.order_id === orderId);
+            if (!order) return;
+            
+            // Заполняем модальное окно данными
+            document.getElementById('modalOrderId').textContent = order.order_id;
+            document.getElementById('modalServiceType').textContent = order.service_type || 'Не указано';
+            document.getElementById('modalAddress').textContent = order.address || 'Не указан';
+            document.getElementById('modalPhone').textContent = order.phone || 'Не указан';
+            document.getElementById('modalComment').textContent = order.comment || 'Нет комментария';
+            
+            // Форматируем даты
+            const formatDate = (dateStr) => {
+                return new Date(dateStr).toLocaleDateString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            };
+            
+            document.getElementById('modalCreatedAt').textContent = formatDate(order.created_at);
+            document.getElementById('modalUpdatedAt').textContent = order.updated_at ? formatDate(order.updated_at) : '—';
+            
+            // Устанавливаем статус с цветом
+            const statusElement = document.getElementById('modalStatus');
+            const statusLabels = {
+                'new': {text: 'Новая', class: 'status-new'},
+                'in_progress': {text: 'В работе', class: 'status-in_progress'},
+                'completed': {text: 'Выполнена', class: 'status-completed'},
+                'cancelled': {text: 'Отменена', class: 'status-cancelled'}
+            };
+            
+            const statusInfo = statusLabels[order.status] || {text: order.status, class: ''};
+            statusElement.textContent = statusInfo.text;
+            statusElement.className = `status-badge ${statusInfo.class}`;
+            
+            // Показываем модальное окно
+            document.getElementById('orderModal').style.display = 'block';
+        }
+
+        // Функция закрытия модального окна
+        function closeModal() {
+            document.getElementById('orderModal').style.display = 'none';
+        }
+
+        // Инициализация обработчиков событий
+        document.addEventListener('DOMContentLoaded', function() {
+            // Закрытие при клике на крестик
+            document.querySelector('.close').addEventListener('click', closeModal);
+            
+            // Закрытие при клике вне окна
+            window.addEventListener('click', (event) => {
+                const modal = document.getElementById('orderModal');
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+            
+            // Загружаем заявки при загрузке страницы
+            loadOrders();
+        });
+
+        // Автообновление каждые 30 секунд
         setInterval(loadOrders, 30000);
     </script>
 </body>
