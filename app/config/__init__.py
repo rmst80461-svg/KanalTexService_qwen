@@ -14,7 +14,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///botdata.db")
 
 # Company info
 COMPANY_NAME = os.getenv("COMPANY_NAME", "КаналТехСервис")
-COMPANY_PHONE = os.getenv("COMPANY_PHONE", "+7 (910) 555-84-14")
+COMPANY_PHONE = os.getenv("COMPANY_PHONE", "+7 (904) 363-36-36")
 COMPANY_EMAIL = os.getenv("COMPANY_EMAIL", "info@kanalteh.ru")
 COMPANY_CITY = os.getenv("COMPANY_CITY", "Ярцево")
 
