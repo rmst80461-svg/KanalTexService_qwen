@@ -48,6 +48,21 @@ class TelegramBot:
         self.admin_ids = ADMIN_IDS if ADMIN_IDS else []
         self.application = None
         self.logo_path = "assets/logo.jpg"
+        
+        # Словарь для преобразования ключей услуг в русские названия
+        self.service_names = {
+            "septic": "🚚 Откачка септика",
+            "cleaning": "🚽 Прочистка канализации",
+            "canal_wash": "💧 Каналопромывка",
+            "sludge": "🔧 Илосос",
+            "video": "🔍 Видеодиагностика",
+            "flushing": "🧹 Промывка канализации",
+            "other": "❓ Другое",
+            "plumbing": "🔧 Сантехнические работы",
+            "installation": "💧 Установка септика",
+            "diagnostics": "🔍 Видеодиагностика труб",
+            "repair": "🛠 Ремонт канализации"
+        }
 
     async def cmd_start(self, update: Update, context):
         """Команда /start с логотипом и меню ShveinyiHUB структуры."""
@@ -184,7 +199,8 @@ class TelegramBot:
                 await update.message.reply_text(f"📋 <b>{text}:</b>", parse_mode=ParseMode.HTML)
                 for order in orders[:10]:
                     order_id = order.get('order_id', '?')
-                    service = order.get('service_type', 'Не указана')
+                    service_key = order.get('service_type', 'Не указана')
+                    service_name = self.service_names.get(service_key, service_key)  # Преобразуем в русское название
                     address = order.get('address', 'Не указан')
                     phone = order.get('phone', 'Не указан')
                     comment = order.get('comment', '')
@@ -193,7 +209,7 @@ class TelegramBot:
                     
                     order_text = (
                         f"{status_emoji} <b>Заявка #{order_id}</b>\n\n"
-                        f"📋 Услуга: {service}\n"
+                        f"📋 Услуга: {service_name}\n"
                         f"📍 Адрес: {address}\n"
                         f"📞 Телефон: {phone}\n"
                         f"💬 Комментарий: {comment if comment else '—'}"
@@ -300,9 +316,12 @@ class TelegramBot:
                 order = self.db.get_order_by_id(order_id)
                 
                 if order:
+                    service_key = order.get('service_type', 'Не указана')
+                    service_name = self.service_names.get(service_key, service_key)  # Преобразуем в русское название
+                    
                     order_text = (
                         f"📋 <b>Новая заявка #{order_id}</b>\n\n"
-                        f"🔧 Услуга: {order.get('service_type', 'Не указана')}\n"
+                        f"🔧 Услуга: {service_name}\n"
                         f"📍 Адрес: {order.get('address', 'Не указан')}\n"
                         f"📞 Телефон: {order.get('phone', 'Не указан')}\n"
                         f"💬 Комментарий: {order.get('comment', '') or '—'}\n\n"
@@ -458,15 +477,7 @@ class TelegramBot:
             # Обработка услуг для заказа
             elif data.startswith("service_"):
                 service = data.replace("service_", "")
-                service_names = {
-                    "septic": "🚚 Откачка септика",
-                    "cleaning": "🚽 Прочистка канализации",
-                    "canal_wash": "💧 Каналопромывка",
-                    "sludge": "🔧 Илосос",
-                    "video": "🔍 Видеодиагностика",
-                    "flushing": "🧹 Промывка канализации",
-                    "other": "❓ Другое"
-                }
+                service_names = self.service_names  # Используем общий словарь
                 
                 if service == "other":
                     context.user_data['step'] = 'ai_chat'
@@ -631,7 +642,9 @@ class TelegramBot:
                         text = f"📋 <b>История заявок клиента:</b>\n\n"
                         for o in orders[:5]:
                             status_emoji = {'new': '🆕', 'in_progress': '🔄', 'completed': '✅', 'cancelled': '❌'}.get(o.get('status', ''), '❓')
-                            text += f"{status_emoji} #{o.get('order_id')} - {o.get('service_type', '?')}\n"
+                            service_key = o.get('service_type', '?')
+                            service_name = self.service_names.get(service_key, service_key)
+                            text += f"{status_emoji} #{o.get('order_id')} - {service_name}\n"
                         await query.answer()
                         await query.message.reply_text(text, parse_mode=ParseMode.HTML)
                     else:
@@ -896,9 +909,12 @@ class TelegramBot:
         order = self.db.get_order_by_id(order_id)
         if order:
             keyboard = self.get_order_action_keyboard(order_id, new_status)
+            service_key = order.get('service_type', 'Не указана')
+            service_name = self.service_names.get(service_key, service_key)  # Преобразуем в русское название
+            
             order_text = (
                 f"{status_names.get(new_status, new_status)} <b>Заявка #{order_id}</b>\n\n"
-                f"📋 Услуга: {order.get('service_type', 'Не указана')}\n"
+                f"📋 Услуга: {service_name}\n"
                 f"📍 Адрес: {order.get('address', 'Не указан')}\n"
                 f"📞 Телефон: {order.get('phone', 'Не указан')}\n"
                 f"💬 Комментарий: {order.get('comment', '') or '—'}"
@@ -971,7 +987,7 @@ class TelegramBot:
         try:
             text = (
                 f"🆕 <b>Новая заявка #{order_id}</b>\n\n"
-                f"📋 Услуга: {service_name}\n"
+                f"📋 Услуга: {service_name}\n"  # service_name уже на русском из context.user_data
                 f"📍 Адрес: {address}\n"
                 f"📞 Телефон: {phone}\n"
                 f"💬 Комментарий: {comment if comment else 'нет'}"
