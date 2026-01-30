@@ -443,7 +443,7 @@ class TelegramBot:
             elif data == "contacts" or data == "show_phone":
                 contacts_text = (
                     "📍 <b>КаналТехСервис</b>\n\n"
-                    "📞 Телефон: <b>+7 (910) 555-84-14</b>\n"
+                    "📞 Телефон: <b>+7 (904) 363-36-36</b>\n"
                     "📧 Email: info@kanalteh.ru\n\n"
                     "⏰ Режим работы: <b>24/7</b>\n"
                     "🏠 г. Ярцево, Смоленская область\n\n"
@@ -699,7 +699,7 @@ class TelegramBot:
             f"📞 Телефон: {phone}\n"
             f"💬 Комментарий: {comment if comment else '—'}\n\n"
             f"👷 Мастер свяжется с вами в ближайшее время!\n"
-            f"📞 Горячая линия: +7 (910) 555-84-14\n\n"
+            f"📞 Горячая линия: +7 (904) 363-36-36\n\n"
             f"Спасибо, что выбрали <b>КаналТехСервис</b>! Рада была помочь! 😊",
             parse_mode=ParseMode.HTML,
             reply_markup=get_main_menu()
@@ -851,7 +851,7 @@ class TelegramBot:
             "other": (
                 "❓ <b>Не нашли ответ?</b>\n\n"
                 "☎️ Позвоните нам:\n"
-                "+7 (910) 555-84-14\n\n"
+                "+7 (904) 363-36-36\n\n"
                 "📧 Напишите на email:\n"
                 "info@kanalteh.ru\n\n"
                 "💬 Или напишите в чат - ответим за 5 минут!"
@@ -878,11 +878,19 @@ class TelegramBot:
         
         self.db.update_order_status(order_id, new_status)
         
+        # Русские названия статусов
         status_names = {
             'new': '🆕 Новая',
             'in_progress': '🔄 В работе',
             'completed': '✅ Выполнена',
             'cancelled': '❌ Отменена'
+        }
+        
+        status_names_ru = {
+            'new': 'Новая',
+            'in_progress': 'В работе',
+            'completed': 'Выполнена',
+            'cancelled': 'Отменена'
         }
         
         order = self.db.get_order_by_id(order_id)
@@ -901,7 +909,7 @@ class TelegramBot:
             if client_id:
                 await self.send_notification(client_id, order_id, new_status)
         
-        await query.answer(f"✅ Статус изменён: {status_names.get(new_status, new_status)}")
+        await query.answer(f"✅ Статус изменён: {status_names_ru.get(new_status, new_status)}")
 
     async def handle_admin_callbacks(self, query, context, data):
         """Обработка админ-функций."""
@@ -934,8 +942,18 @@ class TelegramBot:
                 'completed': '✅',
                 'cancelled': '❌'
             }.get(new_status, '❓')
+            
+            # Русские названия статусов
+            status_names_ru = {
+                'new': 'Новая',
+                'in_progress': 'В работе',
+                'completed': 'Выполнена',
+                'cancelled': 'Отменена'
+            }
+            
+            status_text = status_names_ru.get(new_status, new_status)
 
-            text = f"📌 <b>Обновление статуса заявки</b>\n\n{status_emoji} Новый статус: <b>{new_status}</b>"
+            text = f"📌 <b>Обновление статуса заявки</b>\n\n{status_emoji} Новый статус: <b>{status_text}</b>"
             if comment:
                 text += f"\n\n💬 Комментарий: {comment}"
 
@@ -1010,7 +1028,7 @@ class TelegramBot:
         logger.info("Бот КаналТехСервис запущен")
         logger.info("Структура: ShveinyiHUB")
         logger.info("Услуги: Ассенизаторские")
-        logger.info("Телефон: +7 (910) 555-84-14")
+        logger.info("Телефон: +7 (904) 363-36-36")
         logger.info("Режим: 24/7")
         
         async with self.application:
