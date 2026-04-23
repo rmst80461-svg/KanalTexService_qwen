@@ -700,7 +700,7 @@ class TelegramBot:
         
         order_id = self.db.create_order(
             user_id=user_id,
-            service_type=context.user_data.get('service_type', 'other'),
+            service_type=context.user_data.get('service_name', context.user_data.get('service_type', 'Не указана')),
             address=address,
             phone=phone,
             comment=comment

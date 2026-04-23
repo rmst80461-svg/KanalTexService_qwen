@@ -300,6 +300,21 @@
         let phoneCounts = {};
         let currentFilter = 'all';
 
+        const SERVICE_NAMES = {
+            'septic': '🚚 Откачка септика',
+            'cleaning': '🚽 Прочистка канализации',
+            'canal_wash': '💧 Каналопромывка',
+            'sludge': '🔧 Илосос',
+            'video': '🔍 Видеодиагностика',
+            'flushing': '🧹 Промывка канализации',
+            'other': '❓ Другое'
+        };
+
+        function getServiceName(raw) {
+            if (!raw) return '—';
+            return SERVICE_NAMES[raw] || raw;
+        }
+
         async function loadOrders() {
             try {
                 const response = await fetch('/api/orders');
@@ -382,7 +397,7 @@
                 return `
                     <tr onclick="showOrderDetails(${order.order_id})" style="cursor:pointer;">
                         <td><strong>${order.order_id}</strong></td>
-                        <td>${order.service_type || '—'}</td>
+                        <td>${getServiceName(order.service_type)}</td>
                         <td>${order.address || '—'}</td>
                         <td>${order.phone || '—'}</td>
                         <td>${getClientBadge(order.phone)}</td>
